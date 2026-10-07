@@ -1,20 +1,26 @@
-import e from 'express';
 import jwt from 'jsonwebtoken';
 
 const authUser = async (req, res, next) => {
-    const { token } = req.headers;
+    const authHeader = req.headers.authorization;
+    const tokenFromHeader = authHeader && authHeader.startsWith('Bearer ')
+        ? authHeader.split(' ')[1]
+        : null;
+    const token = req.cookies.token || req.headers.token || tokenFromHeader;
 
     if (!token) {
-        return res.json({ success: false, message: 'Not Authorized, Login Again' });
+        return res.status(401).json({ success: false, message: 'Not Authorized, Login Again' });
     }
+
     try {
-        const token_decode = jwt.verify(token, process.env.JWT_SECRET);
-        req.body.userId = token_decode.id;
+        const tokenDecode = jwt.verify(token, process.env.JWT_SECRET);
+        req.user = {
+            id: tokenDecode.id,
+            ...(tokenDecode.role ? { role: tokenDecode.role } : {}),
+        };
         next();
-        
     } catch (error) {
         console.log(error);
-        res.json({ success: false, message: error.message });
+        return res.status(401).json({ success: false, message: error.message });
     }
 }
 

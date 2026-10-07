@@ -4,11 +4,13 @@ import authUser from '../middleware/auth.js';
 
 const complaintRouter = express.Router();
 
-complaintRouter.post('/createComplaint', authUser, createComplaint);
-complaintRouter.get('/getComplaints', authUser, getComplaints);
-complaintRouter.get('/getComplaintById/:id', authUser, getComplaintById);
+complaintRouter.post('/create', authUser, createComplaint);
+complaintRouter.get('/get', authUser, getComplaints);
+complaintRouter.get('/get/:id', authUser, getComplaintById);
+
 complaintRouter.put('/updateComplaintStatus/:id', authUser, updateComplaintStatus);
-complaintRouter.put('/assignComplaint/:id', authUser, assignComplaint);
-complaintRouter.put('/escalateComplaint/:id', authUser, escalateComplaint);
+complaintRouter.put('/update/:id', authUser, updateComplaintStatus);
+complaintRouter.put('/assign/:id', authUser, assignComplaint);
+complaintRouter.put('/escalate/:id', authUser, escalateComplaint);
 
 export default complaintRouter;

@@ -3,12 +3,13 @@ import connectDB from './config/db.js';
 import userRouter from './routes/userRoutes.js';
 import complaintRouter from './routes/complaintRoutes.js';
 import dotenv from 'dotenv';
-
 import cookieParser from 'cookie-parser';
+
 
 dotenv.config();
 
 connectDB();
+
 
 const app = express();
 app.use(express.json());

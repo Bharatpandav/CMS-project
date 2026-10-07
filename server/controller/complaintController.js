@@ -1,12 +1,13 @@
 import Complaint from '../models/complaintModel.js';
 import ComplaintLog from '../models/complaintLogs.js';
 import User from '../models/userModel.js';
+import { DURATIONS, addTime } from '../utils/deadlineHelper.js';
 
 // 1. Create complaint (student)
 const createComplaint = async (req, res) => {
     try {
         const {
-            title, description, department, photos,
+            title, description, department, images, photos,
             initialLevel, isGroupComplaint, groupMembers,
             undertaking, Date
         } = req.body;
@@ -15,7 +16,16 @@ const createComplaint = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Undertaking must be accepted' });
         }
 
+        if (!req.user || !req.user.id) {
+            return res.status(401).json({ success: false, message: 'User not authenticated' });
+        }
+
         const user = await User.findById(req.user.id);
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        const complaintImages = Array.isArray(images) ? images : Array.isArray(photos) ? photos : [];
 
         const complaint = new Complaint({
             raisedBy: req.user.id,
@@ -23,7 +33,7 @@ const createComplaint = async (req, res) => {
             title,
             description,
             department,
-            photos,
+            images: complaintImages,
             isGroupComplaint,
             groupMembers,
             initialLevel,
@@ -31,7 +41,7 @@ const createComplaint = async (req, res) => {
             undertaking,
             Date,
             deadline: addTime(DURATIONS.OVERALL),
-            levelDeadline: initialLevel === 'dean' ? addTime(DURATIONS.DEAN): addTime(DURATIONS.HOD)    
+            levelDeadline: initialLevel === 'dean' ? addTime(DURATIONS.DEAN) : addTime(DURATIONS.HOD)
         });
 
         await complaint.save();
