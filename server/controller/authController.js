@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import userModel from '../models/userModel.js';
 
 
+// Create JWT token
 const createToken = (id, role) => {
     return jwt.sign(
         { id, role },
@@ -11,12 +12,13 @@ const createToken = (id, role) => {
 };
 
 
-// Route for user login
+// ==================== LOGIN ====================
+
 const loginUser = async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        // Check if email and password are provided
+        // Check required fields
         if (!email || !password) {
             return res.status(400).json({
                 success: false,
@@ -96,7 +98,105 @@ const loginUser = async (req, res) => {
 };
 
 
-// Route for user logout
+// ==================== CHANGE PASSWORD ====================
+
+const changePassword = async (req, res) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+
+        // Check required fields
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({
+                success: false,
+                message: 'Current password and new password are required'
+            });
+        }
+
+        // Validate new password length
+        if (newPassword.length < 8) {
+            return res.status(400).json({
+                success: false,
+                message: 'New password must be at least 8 characters long'
+            });
+        }
+
+        // Find authenticated user
+        const user = await userModel.findById(req.user.id);
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+
+        // Check if account is active
+        if (!user.isActive) {
+            return res.status(403).json({
+                success: false,
+                message: 'Account is inactive. Contact system management.'
+            });
+        }
+
+        // Verify current password
+        const isMatch = await bcryptjs.compare(
+            currentPassword,
+            user.password
+        );
+
+        if (!isMatch) {
+            return res.status(401).json({
+                success: false,
+                message: 'Current password is incorrect'
+            });
+        }
+
+        // Prevent using the same password
+        const isSamePassword = await bcryptjs.compare(
+            newPassword,
+            user.password
+        );
+
+        if (isSamePassword) {
+            return res.status(400).json({
+                success: false,
+                message: 'New password must be different from current password'
+            });
+        }
+
+        // Hash new password
+        const salt = await bcryptjs.genSalt(10);
+        const hashedPassword = await bcryptjs.hash(
+            newPassword,
+            salt
+        );
+
+        // Update password
+        user.password = hashedPassword;
+
+        // First login is now completed
+        user.isFirstLogin = false;
+
+        await user.save();
+
+        return res.json({
+            success: true,
+            message: 'Password changed successfully'
+        });
+
+    } catch (error) {
+        console.log(error);
+
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error'
+        });
+    }
+};
+
+
+// ==================== LOGOUT ====================
+
 const logoutUser = (req, res) => {
     try {
         res.clearCookie('token', {
@@ -121,5 +221,6 @@ const logoutUser = (req, res) => {
 
 export {
     loginUser,
+    changePassword,
     logoutUser
 };
