@@ -1,138 +1,125 @@
-import validator from 'validator';
 import bcryptjs from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import userModel from '../models/userModel.js';
 
 
-const createToken = (id) => {
-    return jwt.sign({ id }, process.env.JWT_SECRET)
-}
-
+const createToken = (id, role) => {
+    return jwt.sign(
+        { id, role },
+        process.env.JWT_SECRET
+    );
+};
 
 
 // Route for user login
 const loginUser = async (req, res) => {
-
     try {
         const { email, password } = req.body;
 
-        const user = await userModel.findOne({ email });
+        // Check if email and password are provided
+        if (!email || !password) {
+            return res.status(400).json({
+                success: false,
+                message: 'Email and password are required'
+            });
+        }
 
-        // Check if user exists or not
+        // Find pre-registered user
+        const user = await userModel.findOne({
+            email: email.toLowerCase()
+        });
+
+        // User must already exist in database
         if (!user) {
-            return res.json({ success: false, message: 'User does not exist' });
+            return res.status(401).json({
+                success: false,
+                message: 'Invalid credentials'
+            });
         }
 
-        const isMatch = await bcryptjs.compare(password, user.password);
-
-
-        // if password is matched
-        if (isMatch) {
-            const token = createToken(user._id);
-            
-            res.cookie('token', token, {
-             httpOnly: true,
-             secure: process.env.NODE_ENV === 'production',
-             sameSite: 'strict',
-             maxAge: 7 * 24 * 60 * 60 * 1000, // 7 din
-         });
-            res.json({ success: true, message: 'Login successful', token });
+        // Check if account is active
+        if (!user.isActive) {
+            return res.status(403).json({
+                success: false,
+                message: 'Account is inactive. Contact system management.'
+            });
         }
 
-        // if password is not matched
-        else {
-            res.json({ success: false, message: 'Invalid credentials' });
+        // Verify password
+        const isMatch = await bcryptjs.compare(
+            password,
+            user.password
+        );
+
+        if (!isMatch) {
+            return res.status(401).json({
+                success: false,
+                message: 'Invalid credentials'
+            });
         }
+
+        // Generate JWT containing user ID and role
+        const token = createToken(
+            user._id.toString(),
+            user.role
+        );
+
+        // Store token in HTTP-only cookie
+        res.cookie('token', token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+            maxAge: 7 * 24 * 60 * 60 * 1000
+        });
+
+        return res.json({
+            success: true,
+            message: 'Login successful',
+            token,
+            user: {
+                id: user._id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                isFirstLogin: user.isFirstLogin
+            }
+        });
 
     } catch (error) {
         console.log(error);
-        res.json({ success: false, message: error.message });
+
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error'
+        });
     }
+};
 
-}
 
+// Route for user logout
 const logoutUser = (req, res) => {
     try {
         res.clearCookie('token', {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
+            sameSite: 'strict'
         });
 
-        res.json({ success: true, message: 'Logged out successfully' });
+        return res.json({
+            success: true,
+            message: 'Logged out successfully'
+        });
+
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        return res.status(500).json({
+            success: false,
+            message: error.message
+        });
     }
 };
 
 
-
-// Route for user registration
-const registerUser = async (req, res) => {
-    try {
-        const { name, email, password } = req.body;
-
-        // Check if user already exists or not
-
-        const exists = await userModel.findOne({ email });
-        if (exists) {
-            return res.json({ success: false, message: 'User already exists' });
-        }
-
-
-        // validating email format and strong password
-        if (!validator.isEmail) {
-            return res.json({ success: false, message: 'please enter a valid email' });
-        }
-
-        if (password.length < 8) {
-            return res.json({ success: false, message: 'please enter a strong password' });
-        }
-
-        // Hashing password
-        const salt = await bcryptjs.genSalt(10);
-        const hashedPassword = await bcryptjs.hash(password, salt);
-
-
-        // Creating new user
-        const newUser = new userModel({
-            name,
-            email,
-            password: hashedPassword,
-        });
-
-        const user = await newUser.save();
-
-        const token = createToken(user._id);
-
-        res.json({ success: true, message: 'User registered successfully, Now please login', token });
-
-
-
-    } catch (error) {
-        console.log(error);
-        res.json({ success: false, message: error.message });
-    }
-
-}
-
-
-
-
-// Route for admin login
-const adminLogin = async (req, res) => {
-    try {
-        const { email, password } = req.body;
-        if (email === process.env.ADMIN_EMAIL && password === process.env.ADMIN_PASSWORD) {
-            const token = jwt.sign(email + password, process.env.JWT_SECRET);
-            res.json({ success: true, message: 'Admin login successful', token });
-        } else {
-            res.json({ success: false, message: 'Invalid credentials' });
-        }
-    } catch (error) {
-        console.log(error);
-        res.json({ success: false, message: error.message });
-    }
-}
-
-export { registerUser, loginUser, adminLogin, logoutUser }; 
+export {
+    loginUser,
+    logoutUser
+};
