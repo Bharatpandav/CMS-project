@@ -242,6 +242,20 @@ const bulkCreateUsers = async (req, res) => {
         const credentialCSV =
             generateCredentialCSV(createdUsers);
 
+        if (req.query.downloadCredentials === 'true') {
+            res.setHeader(
+                'Content-Type',
+                'text/csv; charset=utf-8'
+            );
+
+            res.setHeader(
+                'Content-Disposition',
+                'attachment; filename="user-credentials.csv"'
+            );
+
+            return res.status(201).send(credentialCSV);
+        }
+
         return res.status(201).json({
             success: true,
             message: 'Bulk user import completed',
