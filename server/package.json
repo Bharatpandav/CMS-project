@@ -1,42 +1,22 @@
 {
-
   "name": "server",
-
   "version": "1.0.0",
-
   "type": "module",
-
   "main": "server.js",
-
   "dependencies": {
-
     "bcrypt": "^6.0.0",
-
     "bcryptjs": "^3.0.3",
-
     "cookie-parser": "^1.4.7",
-
     "dotenv": "^18.0.3",
-
     "express": "^5.2.1",
-
     "jsonwebtoken": "^9.0.3",
-
     "mongoose": "^9.10.2",
-
     "nodemon": "^3.1.14",
-
     "validator": "^13.15.35"
-
   },
-
   "scripts": {
-
     "dev": "nodemon server.js",
-
-    "start": "node server.js"
-
+    "start": "node server.js",
+    "seed:users": "node scripts/seedUsers.js"
   }
-
 }
-
