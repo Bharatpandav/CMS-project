@@ -3,6 +3,7 @@ import { parse } from 'csv-parse/sync';
 
 import userModel from '../models/userModel.js';
 import generatePassword from '../utils/generatePassword.js';
+import generateCredentialCSV from '../utils/generateCredentialCSV.js';
 
 const validRoles = [
     'student',
@@ -238,6 +239,9 @@ const bulkCreateUsers = async (req, res) => {
             });
         }
 
+        const credentialCSV =
+            generateCredentialCSV(createdUsers);
+
         return res.status(201).json({
             success: true,
             message: 'Bulk user import completed',
@@ -247,7 +251,8 @@ const bulkCreateUsers = async (req, res) => {
                 failed: failedUsers.length
             },
             createdUsers,
-            failedUsers
+            failedUsers,
+            credentialCSV
         });
 
     } catch (error) {
