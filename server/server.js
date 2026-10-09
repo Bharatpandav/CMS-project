@@ -1,21 +1,22 @@
+import 'dotenv/config';
+
 import express from 'express';
 import connectDB from './config/db.js';
 import userRouter from './routes/userRoutes.js';
 import complaintRouter from './routes/complaintRoutes.js';
-import dotenv from 'dotenv';
+import userManagementRouter from './routes/userManagementRoutes.js';
 import cookieParser from 'cookie-parser';
-
-
-dotenv.config();
 
 connectDB();
 
-
 const app = express();
+
 app.use(express.json());
 app.use(cookieParser());
+
 app.use('/api/complaints', complaintRouter);
 app.use('/api/user', userRouter);
+app.use('/api/users', userManagementRouter);
 
 const PORT = process.env.PORT || 5000;
 
