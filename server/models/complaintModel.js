@@ -129,13 +129,15 @@ const complaintSchema = new mongoose.Schema(
             type: String,
             enum: [
                 'pending',
+                'submitted',
                 'assigned',
                 'accepted',
                 'rejected',
                 'resolved',
-                'escalated'
+                'escalated',
+                'reopened'
             ],
-            default: 'pending',
+            default: 'submitted',
             index: true
         },
         deadline: {

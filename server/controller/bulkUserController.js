@@ -4,6 +4,7 @@ import { parse } from 'csv-parse/sync';
 import userModel from '../models/userModel.js';
 import generatePassword from '../utils/generatePassword.js';
 import generateCredentialCSV from '../utils/generateCredentialCSV.js';
+import escapeRegExp from '../utils/escapeRegExp.js';
 import { allowedRoles } from '../middleware/authorizeUserManagement.js';
 
 const validRoles = [
@@ -327,7 +328,12 @@ const bulkCreateUsers = async (req, res) => {
             if (role === 'student' && trimmedRoll) {
                 const existingRollUser =
                     await userModel.findOne({
-                        rollNumber: trimmedRoll
+                        rollNumber: {
+                            $regex: new RegExp(
+                                `^${escapeRegExp(trimmedRoll)}$`,
+                                'i'
+                            )
+                        }
                     });
 
                 if (existingRollUser) {

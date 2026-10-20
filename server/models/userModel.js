@@ -53,6 +53,23 @@ const userSchema = new mongoose.Schema(
             trim: true
         },
 
+        programme: {
+            type: String,
+            trim: true,
+            default: ''
+        },
+
+        dateOfBirth: {
+            type: Date,
+            default: null
+        },
+
+        assignedAdvisor: {
+            type: String,
+            trim: true,
+            default: ''
+        },
+
         isFirstLogin: {
             type: Boolean,
             default: true

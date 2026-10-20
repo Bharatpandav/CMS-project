@@ -5,6 +5,19 @@ import Category from '../models/categoryModel.js';
 import User from '../models/userModel.js';
 import { DURATIONS, addTime } from '../utils/deadlineHelper.js';
 import { ensureDefaultCategories } from '../utils/categoryHelper.js';
+import {
+    assertTransition,
+    canActAsCurrentHandler,
+    findDepartmentHod,
+    findInstitutionalDean,
+    findViceChancellor,
+    getListFilterForRole,
+    isTerminalStatus,
+    loadActor,
+    recordComplaintLog,
+    resolveResponsibleDepartment,
+    validateAssignTarget
+} from '../utils/complaintWorkflowHelper.js';
 
 // Helper: Check if user is authorized to access a private complaint
 const isUserAuthorizedForComplaint = (complaint, user) => {
@@ -17,21 +30,26 @@ const isUserAuthorizedForComplaint = (complaint, user) => {
     );
     const isAssignee = complaint.currentAssignee?.toString() === userIdStr;
     const isAssigner = complaint.assignedBy?.toString() === userIdStr;
-    const isSuperAdminOrDean = ['super_admin', 'dean'].includes(user.role);
     const isDeptHOD =
         user.role === 'hod' && user.department === complaint.department;
-    const isDeptAdvisor =
-        user.role === 'advisor' &&
-        (isAssignee || user.department === complaint.department);
+    const isAssignedAdvisor =
+        user.role === 'advisor' && isAssignee;
+    const isScopedDean =
+        user.role === 'dean' &&
+        (isAssignee || complaint.currentLevel === 'dean');
+    const isScopedVc =
+        user.role === 'super_admin' &&
+        (isAssignee || complaint.currentLevel === 'vc');
 
     return (
         isCreator ||
         isParticipant ||
         isAssignee ||
         isAssigner ||
-        isSuperAdminOrDean ||
         isDeptHOD ||
-        isDeptAdvisor
+        isAssignedAdvisor ||
+        isScopedDean ||
+        isScopedVc
     );
 };
 
@@ -58,7 +76,6 @@ const createComplaint = async (req, res) => {
             description,
             category,
             categoryId,
-            department,
             location,
             incidentDate,
             preferredResolution,
@@ -163,14 +180,50 @@ const createComplaint = async (req, res) => {
         }
 
         const finalCategory = categoryDoc.name;
-        let finalDepartment = categoryDoc.targetDepartment;
-        if (finalDepartment === 'Academic Affairs' && student.department) {
-            finalDepartment = student.department;
-        } else if (department && department.trim()) {
-            finalDepartment = department.trim();
-        }
+        const finalDepartment = resolveResponsibleDepartment(
+            categoryDoc,
+            student
+        );
 
         const initialLevel = categoryDoc.initialLevel || 'hod';
+
+        let currentLevel = initialLevel;
+        let currentAssignee = null;
+
+        if (initialLevel === 'hod') {
+            const hod = await findDepartmentHod(finalDepartment);
+
+            if (!hod) {
+                return res.status(422).json({
+                    success: false,
+                    message: `No active HOD found for department "${finalDepartment}". Complaint cannot be routed.`,
+                    routingIssue: {
+                        department: finalDepartment,
+                        expectedRole: 'hod'
+                    }
+                });
+            }
+
+            currentAssignee = hod._id;
+            currentLevel = 'hod';
+        } else {
+            const dean = await findInstitutionalDean();
+
+            if (!dean) {
+                return res.status(422).json({
+                    success: false,
+                    message:
+                        'No active Dean found. Complaint cannot be routed.',
+                    routingIssue: {
+                        department: finalDepartment,
+                        expectedRole: 'dean'
+                    }
+                });
+            }
+
+            currentAssignee = dean._id;
+            currentLevel = 'dean';
+        }
 
         // Construct server-controlled student profile snapshot
         const studentProfile = {
@@ -182,7 +235,7 @@ const createComplaint = async (req, res) => {
             section: student.section || '',
             programme: student.programme || '',
             batch: student.batch || '',
-            advisor: student.advisor || ''
+            advisor: student.assignedAdvisor || student.advisor || ''
         };
 
         // Attachments & images
@@ -229,13 +282,15 @@ const createComplaint = async (req, res) => {
             images: complaintImages,
             attachments: complaintAttachments,
             initialLevel,
-            currentLevel: initialLevel,
-            status: 'pending',
+            currentLevel,
+            currentAssignee,
+            assignedBy: null,
+            status: 'submitted',
             undertaking: true,
             Date: new Date(),
             deadline: addTime(DURATIONS.OVERALL),
             levelDeadline:
-                initialLevel === 'dean'
+                currentLevel === 'dean'
                     ? addTime(DURATIONS.DEAN)
                     : addTime(DURATIONS.HOD)
         });
@@ -273,12 +328,16 @@ const createComplaint = async (req, res) => {
             }
         }
 
-        // Audit log
-        await ComplaintLog.create({
-            complaint: complaint._id,
-            level: initialLevel,
-            action: 'assigned',
-            remarks: `Complaint submitted by ${student.name} (${finalComplaintType}, ${finalVisibility})`
+        await recordComplaintLog({
+            complaintId: complaint._id,
+            actor: student,
+            previousStatus: null,
+            newStatus: 'submitted',
+            previousAssignee: null,
+            newAssignee: currentAssignee,
+            level: currentLevel,
+            action: 'submitted',
+            remarks: `Complaint submitted by ${student.name} (${finalComplaintType}, ${finalVisibility}); routed to ${currentLevel}`
         });
 
         res.status(201).json({
@@ -305,7 +364,15 @@ const getComplaints = async (req, res) => {
             myComplaints
         } = req.query;
 
-        const user = await User.findById(id).select('department role');
+        const user = await User.findById(id).select('department role isActive');
+
+        if (!user?.isActive) {
+            return res.status(403).json({
+                success: false,
+                message: 'Account is inactive'
+            });
+        }
+
         let filter = {};
 
         if (role === 'student') {
@@ -317,7 +384,6 @@ const getComplaints = async (req, res) => {
                     ]
                 };
             } else {
-                // Students see public complaints OR private complaints they created or participate in
                 filter = {
                     $or: [
                         { visibility: 'public' },
@@ -331,28 +397,21 @@ const getComplaints = async (req, res) => {
                     ]
                 };
             }
-        } else if (role === 'advisor') {
-            // Advisors see complaints assigned to them, in their department, or public
-            filter = {
-                $or: [
-                    { currentAssignee: id },
-                    { assignedBy: id },
-                    { department: user?.department },
-                    { visibility: 'public' }
-                ]
-            };
-        } else if (role === 'hod') {
-            // HOD sees complaints in their department or assigned to them or public
-            filter = {
-                $or: [
-                    { department: user?.department },
-                    { currentAssignee: id },
-                    { visibility: 'public' }
-                ]
-            };
-        } else if (role === 'dean' || role === 'super_admin') {
-            // Institutional leadership has oversight
-            filter = {};
+        } else {
+            const roleFilter = getListFilterForRole(
+                role,
+                id,
+                user.department
+            );
+
+            if (roleFilter?._id === null) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Not authorized to list complaints'
+                });
+            }
+
+            filter = roleFilter;
         }
 
         if (status) filter.status = status;
@@ -803,14 +862,46 @@ const leaveComplaint = async (req, res) => {
     }
 };
 
-// ==================== 10. ASSIGN COMPLAINT (DEAN -> HOD, HOD -> ADVISOR) ====================
+// ==================== 10. ASSIGN / FORWARD COMPLAINT ====================
 const assignComplaint = async (req, res) => {
     try {
         const complaintId = req.params.id || req.body.complaintId;
-        const { assignToId } = req.body;
-        const { role, id: assignerId } = req.user;
+        const { assignToId, remarks, reason } = req.body;
+        const assignmentReason = (remarks || reason || '').trim();
+        const assignerId = req.user.id;
+
+        if (!assignToId) {
+            return res.status(400).json({
+                success: false,
+                message: 'assignToId is required'
+            });
+        }
+
+        if (!assignmentReason) {
+            return res.status(400).json({
+                success: false,
+                message: 'Assignment reason is required'
+            });
+        }
+
+        const assigner = await loadActor(assignerId);
+
+        if (!assigner?.isActive) {
+            return res.status(403).json({
+                success: false,
+                message: 'Account is inactive'
+            });
+        }
+
+        if (!['hod', 'dean'].includes(assigner.role)) {
+            return res.status(403).json({
+                success: false,
+                message: 'Not authorized to assign complaints'
+            });
+        }
 
         const complaint = await Complaint.findById(complaintId);
+
         if (!complaint) {
             return res.status(404).json({
                 success: false,
@@ -818,38 +909,75 @@ const assignComplaint = async (req, res) => {
             });
         }
 
-        let nextLevel;
-        let duration; // FIXED: declared variable
-        if (role === 'dean') {
-            nextLevel = 'hod';
-            duration = DURATIONS.HOD;
-        } else if (role === 'hod') {
-            nextLevel = 'advisor';
-            duration = DURATIONS.ADVISOR;
-        } else {
-            return res.status(403).json({
+        if (isTerminalStatus(complaint.status)) {
+            return res.status(400).json({
                 success: false,
-                message: 'Not authorized to assign'
+                message: 'Closed complaints cannot be reassigned'
             });
         }
 
+        const transition = assertTransition('assign', complaint.status);
+
+        if (!transition.ok) {
+            return res.status(400).json({
+                success: false,
+                message: transition.message
+            });
+        }
+
+        if (!canActAsCurrentHandler(complaint, assigner)) {
+            return res.status(403).json({
+                success: false,
+                message: 'Not authorized to assign this complaint'
+            });
+        }
+
+        const targetValidation = await validateAssignTarget({
+            complaint,
+            assigner,
+            assigneeId: assignToId
+        });
+
+        if (!targetValidation.ok) {
+            return res.status(400).json({
+                success: false,
+                message: targetValidation.message
+            });
+        }
+
+        const { assignee, nextLevel } = targetValidation;
+        const previousStatus = complaint.status;
+        const previousAssignee = complaint.currentAssignee;
+
+        const duration =
+            nextLevel === 'advisor'
+                ? DURATIONS.ADVISOR
+                : nextLevel === 'hod'
+                ? DURATIONS.HOD
+                : DURATIONS.DEAN;
+
         complaint.currentLevel = nextLevel;
-        complaint.currentAssignee = assignToId;
+        complaint.currentAssignee = assignee._id;
         complaint.assignedBy = assignerId;
         complaint.levelDeadline = addTime(duration);
         complaint.status = 'assigned';
         await complaint.save();
 
-        await ComplaintLog.create({
-            complaint: complaint._id,
+        await recordComplaintLog({
+            complaintId: complaint._id,
+            actor: assigner,
+            previousStatus,
+            newStatus: 'assigned',
+            previousAssignee,
+            newAssignee: assignee._id,
             level: nextLevel,
-            assignedTo: assignToId,
-            action: 'assigned'
+            action: 'assigned',
+            remarks: assignmentReason
         });
 
         res.json({
             success: true,
-            message: `Complaint assigned to ${nextLevel}`,
+            message: `Complaint assigned to ${assignee.name} (${nextLevel})`,
             complaint
         });
     } catch (error) {
@@ -861,7 +989,8 @@ const assignComplaint = async (req, res) => {
 const updateComplaintStatus = async (req, res) => {
     try {
         const complaintId = req.params.id || req.body.complaintId;
-        const { action, remarks } = req.body; // action: 'accepted' | 'rejected'
+        const { action, remarks, reason } = req.body;
+        const note = (remarks || reason || '').trim();
 
         if (!['accepted', 'rejected'].includes(action)) {
             return res.status(400).json({
@@ -870,7 +999,17 @@ const updateComplaintStatus = async (req, res) => {
             });
         }
 
+        const actor = await loadActor(req.user.id);
+
+        if (!actor?.isActive) {
+            return res.status(403).json({
+                success: false,
+                message: 'Account is inactive'
+            });
+        }
+
         const complaint = await Complaint.findById(complaintId);
+
         if (!complaint) {
             return res.status(404).json({
                 success: false,
@@ -878,15 +1017,51 @@ const updateComplaintStatus = async (req, res) => {
             });
         }
 
+        if (isTerminalStatus(complaint.status)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Complaint is already closed'
+            });
+        }
+
+        const transition = assertTransition(action, complaint.status);
+
+        if (!transition.ok) {
+            return res.status(400).json({
+                success: false,
+                message: transition.message
+            });
+        }
+
+        if (!canActAsCurrentHandler(complaint, actor)) {
+            return res.status(403).json({
+                success: false,
+                message: 'Not authorized to update this complaint'
+            });
+        }
+
+        if (action === 'rejected' && !note) {
+            return res.status(400).json({
+                success: false,
+                message: 'Rejection reason is required'
+            });
+        }
+
+        const previousStatus = complaint.status;
+
         complaint.status = action;
         await complaint.save();
 
-        await ComplaintLog.create({
-            complaint: complaint._id,
+        await recordComplaintLog({
+            complaintId: complaint._id,
+            actor,
+            previousStatus,
+            newStatus: action,
+            previousAssignee: complaint.currentAssignee,
+            newAssignee: complaint.currentAssignee,
             level: complaint.currentLevel,
-            assignedTo: complaint.currentAssignee,
             action,
-            remarks
+            remarks: note
         });
 
         res.json({
@@ -899,14 +1074,31 @@ const updateComplaintStatus = async (req, res) => {
     }
 };
 
-// ==================== 12. ESCALATE COMPLAINT ====================
+// ==================== 12. ESCALATE / RETURN COMPLAINT ====================
 const escalateComplaint = async (req, res) => {
     try {
         const complaintId = req.params.id || req.body.complaintId;
-        const { remarks } = req.body;
-        const { role } = req.user;
+        const { remarks, reason } = req.body;
+        const escalationReason = (remarks || reason || '').trim();
+
+        if (!escalationReason) {
+            return res.status(400).json({
+                success: false,
+                message: 'Escalation reason is required'
+            });
+        }
+
+        const actor = await loadActor(req.user.id);
+
+        if (!actor?.isActive) {
+            return res.status(403).json({
+                success: false,
+                message: 'Account is inactive'
+            });
+        }
 
         const complaint = await Complaint.findById(complaintId);
+
         if (!complaint) {
             return res.status(404).json({
                 success: false,
@@ -914,10 +1106,74 @@ const escalateComplaint = async (req, res) => {
             });
         }
 
+        if (isTerminalStatus(complaint.status)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Closed complaints cannot be escalated'
+            });
+        }
+
+        const transition = assertTransition('escalate', complaint.status);
+
+        if (!transition.ok) {
+            return res.status(400).json({
+                success: false,
+                message: transition.message
+            });
+        }
+
+        if (!canActAsCurrentHandler(complaint, actor)) {
+            return res.status(403).json({
+                success: false,
+                message: 'Not authorized to escalate this complaint'
+            });
+        }
+
+        const previousStatus = complaint.status;
+        const previousAssignee = complaint.currentAssignee;
         let nextLevel;
-        if (role === 'advisor') nextLevel = 'hod';
-        else if (role === 'hod') nextLevel = 'dean';
-        else {
+        let nextAssignee = null;
+        let logAction = 'escalated';
+
+        if (actor.role === 'advisor') {
+            const hod = await findDepartmentHod(complaint.department);
+
+            if (!hod) {
+                return res.status(422).json({
+                    success: false,
+                    message:
+                        'Responsible department HOD not found; cannot return complaint'
+                });
+            }
+
+            nextLevel = 'hod';
+            nextAssignee = hod._id;
+            logAction = 'returned';
+        } else if (actor.role === 'hod') {
+            const dean = await findInstitutionalDean();
+
+            if (!dean) {
+                return res.status(422).json({
+                    success: false,
+                    message: 'No active Dean available for escalation'
+                });
+            }
+
+            nextLevel = 'dean';
+            nextAssignee = dean._id;
+        } else if (actor.role === 'dean') {
+            const vc = await findViceChancellor();
+
+            if (!vc) {
+                return res.status(422).json({
+                    success: false,
+                    message: 'No active Vice Chancellor available for escalation'
+                });
+            }
+
+            nextLevel = 'vc';
+            nextAssignee = vc._id;
+        } else {
             return res.status(403).json({
                 success: false,
                 message: 'Not authorized to escalate'
@@ -925,15 +1181,27 @@ const escalateComplaint = async (req, res) => {
         }
 
         complaint.currentLevel = nextLevel;
-        complaint.currentAssignee = null;
+        complaint.currentAssignee = nextAssignee;
+        complaint.assignedBy = actor._id;
+        complaint.levelDeadline =
+            nextLevel === 'hod'
+                ? addTime(DURATIONS.HOD)
+                : nextLevel === 'dean'
+                ? addTime(DURATIONS.DEAN)
+                : addTime(DURATIONS.OVERALL);
         complaint.status = 'escalated';
         await complaint.save();
 
-        await ComplaintLog.create({
-            complaint: complaint._id,
+        await recordComplaintLog({
+            complaintId: complaint._id,
+            actor,
+            previousStatus,
+            newStatus: 'escalated',
+            previousAssignee,
+            newAssignee: nextAssignee,
             level: nextLevel,
-            action: 'escalated',
-            remarks
+            action: logAction,
+            remarks: escalationReason
         });
 
         res.json({
@@ -950,9 +1218,34 @@ const escalateComplaint = async (req, res) => {
 const resolveComplaint = async (req, res) => {
     try {
         const complaintId = req.params.id || req.body.complaintId;
-        const { remarks } = req.body;
+        const { remarks, resolutionNote } = req.body;
+        const note = (remarks || resolutionNote || '').trim();
+
+        if (!note) {
+            return res.status(400).json({
+                success: false,
+                message: 'Resolution note is required'
+            });
+        }
+
+        const actor = await loadActor(req.user.id);
+
+        if (!actor?.isActive) {
+            return res.status(403).json({
+                success: false,
+                message: 'Account is inactive'
+            });
+        }
+
+        if (!['advisor', 'hod', 'dean', 'super_admin'].includes(actor.role)) {
+            return res.status(403).json({
+                success: false,
+                message: 'Not authorized to resolve complaints'
+            });
+        }
 
         const complaint = await Complaint.findById(complaintId);
+
         if (!complaint) {
             return res.status(404).json({
                 success: false,
@@ -960,15 +1253,45 @@ const resolveComplaint = async (req, res) => {
             });
         }
 
+        if (isTerminalStatus(complaint.status)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Complaint is already closed'
+            });
+        }
+
+        const transition = assertTransition('resolve', complaint.status);
+
+        if (!transition.ok) {
+            return res.status(400).json({
+                success: false,
+                message: transition.message
+            });
+        }
+
+        if (!canActAsCurrentHandler(complaint, actor)) {
+            return res.status(403).json({
+                success: false,
+                message: 'Not authorized to resolve this complaint'
+            });
+        }
+
+        const previousStatus = complaint.status;
+
         complaint.status = 'resolved';
         complaint.resolvedAt = new Date();
         await complaint.save();
 
-        await ComplaintLog.create({
-            complaint: complaint._id,
+        await recordComplaintLog({
+            complaintId: complaint._id,
+            actor,
+            previousStatus,
+            newStatus: 'resolved',
+            previousAssignee: complaint.currentAssignee,
+            newAssignee: complaint.currentAssignee,
             level: complaint.currentLevel,
             action: 'resolved',
-            remarks
+            remarks: note
         });
 
         res.json({
@@ -991,44 +1314,67 @@ const handleTimeouts = async () => {
     });
 
     for (const complaint of expiredComplaints) {
+        const previousStatus = complaint.status;
+        const previousAssignee = complaint.currentAssignee;
+
         if (complaint.currentLevel === 'advisor') {
+            const hod = await findDepartmentHod(complaint.department);
+
             complaint.currentLevel = 'hod';
-            complaint.currentAssignee = complaint.assignedBy;
+            complaint.currentAssignee =
+                hod?._id || complaint.assignedBy || null;
             complaint.levelDeadline = addTime(DURATIONS.HOD);
             complaint.status = 'escalated';
             await complaint.save();
 
-            await ComplaintLog.create({
-                complaint: complaint._id,
+            await recordComplaintLog({
+                complaintId: complaint._id,
+                actor: null,
+                previousStatus,
+                newStatus: 'escalated',
+                previousAssignee,
+                newAssignee: complaint.currentAssignee,
                 level: 'hod',
                 action: 'escalated',
                 remarks:
                     'Advisor has not solved the complaint within the deadline'
             });
         } else if (complaint.currentLevel === 'hod') {
-            const dean = await User.findOne({ role: 'dean' });
+            const dean = await findInstitutionalDean();
+
             complaint.currentLevel = 'dean';
-            complaint.currentAssignee = complaint.assignedBy || dean?._id || null;
+            complaint.currentAssignee = dean?._id || null;
             complaint.levelDeadline = addTime(DURATIONS.DEAN);
             complaint.status = 'escalated';
             await complaint.save();
 
-            await ComplaintLog.create({
-                complaint: complaint._id,
+            await recordComplaintLog({
+                complaintId: complaint._id,
+                actor: null,
+                previousStatus,
+                newStatus: 'escalated',
+                previousAssignee,
+                newAssignee: complaint.currentAssignee,
                 level: 'dean',
                 action: 'escalated',
                 remarks:
                     'HOD has not solved the complaint within the deadline'
             });
         } else if (complaint.currentLevel === 'dean') {
-            const vc = await User.findOne({ role: 'super_admin' });
+            const vc = await findViceChancellor();
+
             complaint.currentLevel = 'vc';
             complaint.currentAssignee = vc?._id || null;
             complaint.status = 'escalated';
             await complaint.save();
 
-            await ComplaintLog.create({
-                complaint: complaint._id,
+            await recordComplaintLog({
+                complaintId: complaint._id,
+                actor: null,
+                previousStatus,
+                newStatus: 'escalated',
+                previousAssignee,
+                newAssignee: complaint.currentAssignee,
                 level: 'vc',
                 action: 'escalated',
                 remarks:

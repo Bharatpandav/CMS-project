@@ -1,6 +1,8 @@
 import bcryptjs from 'bcryptjs';
 import userModel from '../models/userModel.js';
 import generatePassword from '../utils/generatePassword.js';
+import escapeRegExp from '../utils/escapeRegExp.js';
+import { allowedRoles } from '../middleware/authorizeUserManagement.js';
 
 const createUser = async (req, res) => {
     try {
@@ -36,6 +38,18 @@ const createUser = async (req, res) => {
             });
         }
 
+        const rolesCreatorCanCreate = allowedRoles[req.user?.role];
+
+        if (
+            !rolesCreatorCanCreate ||
+            !rolesCreatorCanCreate.includes(role)
+        ) {
+            return res.status(403).json({
+                success: false,
+                message: `You are not authorized to create a ${role} account`
+            });
+        }
+
         // Student-specific required fields
         if (role === 'student' && (!rollNumber || !rollNumber.trim())) {
             return res.status(400).json({
@@ -60,8 +74,14 @@ const createUser = async (req, res) => {
 
         // Check if student roll number / URN already exists
         if (role === 'student' && rollNumber) {
+            const trimmedRoll = rollNumber.trim();
             const existingRoll = await userModel.findOne({
-                rollNumber: rollNumber.trim()
+                rollNumber: {
+                    $regex: new RegExp(
+                        `^${escapeRegExp(trimmedRoll)}$`,
+                        'i'
+                    )
+                }
             });
 
             if (existingRoll) {
@@ -124,4 +144,68 @@ const createUser = async (req, res) => {
     }
 };
 
-export { createUser };
+const getAssignableUsers = async (req, res) => {
+    try {
+        const actor = await userModel
+            .findById(req.user.id)
+            .select('role department isActive');
+
+        if (!actor?.isActive) {
+            return res.status(403).json({
+                success: false,
+                message: 'Account is inactive'
+            });
+        }
+
+        const department = (req.query.department || '').trim();
+
+        if (!department) {
+            return res.status(400).json({
+                success: false,
+                message: 'department query parameter is required'
+            });
+        }
+
+        let filter;
+
+        if (actor.role === 'hod') {
+            filter = {
+                isActive: true,
+                $or: [
+                    { role: 'advisor', department },
+                    { role: 'dean' }
+                ]
+            };
+        } else if (actor.role === 'dean') {
+            filter = {
+                isActive: true,
+                $or: [
+                    { role: 'hod', department },
+                    { role: 'advisor', department }
+                ]
+            };
+        } else {
+            return res.status(403).json({
+                success: false,
+                message: 'Not authorized to list assignable users'
+            });
+        }
+
+        const users = await userModel
+            .find(filter)
+            .select('name email role department')
+            .sort({ role: 1, name: 1 })
+            .lean();
+
+        return res.json({ success: true, users });
+    } catch (error) {
+        console.error('Assignable users error:', error);
+
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error'
+        });
+    }
+};
+
+export { createUser, getAssignableUsers };

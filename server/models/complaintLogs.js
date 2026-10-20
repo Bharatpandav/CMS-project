@@ -8,6 +8,33 @@ const complaintLogSchema = new mongoose.Schema(
             required: true,
             index: true
         },
+        actor: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'user',
+            default: null
+        },
+        actorRole: {
+            type: String,
+            default: null
+        },
+        previousStatus: {
+            type: String,
+            default: null
+        },
+        newStatus: {
+            type: String,
+            default: null
+        },
+        previousAssignee: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'user',
+            default: null
+        },
+        newAssignee: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'user',
+            default: null
+        },
         level: {
             type: String,
             enum: ['dean', 'hod', 'advisor', 'vc', 'super_admin']
@@ -18,7 +45,16 @@ const complaintLogSchema = new mongoose.Schema(
         },
         action: {
             type: String,
-            enum: ['assigned', 'accepted', 'rejected', 'escalated', 'resolved']
+            enum: [
+                'submitted',
+                'assigned',
+                'accepted',
+                'rejected',
+                'escalated',
+                'resolved',
+                'returned',
+                'reopened'
+            ]
         },
         remarks: {
             type: String

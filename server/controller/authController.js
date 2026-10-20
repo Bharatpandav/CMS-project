@@ -1,6 +1,19 @@
 import bcryptjs from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import userModel from '../models/userModel.js';
+import escapeRegExp from '../utils/escapeRegExp.js';
+
+const PROTECTED_PROFILE_FIELDS = [
+    'name',
+    'email',
+    'role',
+    'department',
+    'rollNumber',
+    'semester',
+    'section',
+    'isActive',
+    'isFirstLogin'
+];
 
 // Create JWT token
 const createToken = (id, role) => {
@@ -41,7 +54,12 @@ const loginUser = async (req, res) => {
         } else {
             // Case-insensitive lookup by student rollNumber / URN
             user = await userModel.findOne({
-                rollNumber: { $regex: new RegExp(`^${identifier}$`, 'i') }
+                rollNumber: {
+                    $regex: new RegExp(
+                        `^${escapeRegExp(identifier)}$`,
+                        'i'
+                    )
+                }
             });
         }
 
@@ -112,9 +130,74 @@ const loginUser = async (req, res) => {
     }
 };
 
+// ==================== CURRENT USER PROFILE ====================
+const getCurrentUser = async (req, res) => {
+    try {
+        const user = await userModel
+            .findById(req.user.id)
+            .select('-password');
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+
+        if (!user.isActive) {
+            return res.status(403).json({
+                success: false,
+                message: 'Account is inactive. Contact system management.'
+            });
+        }
+
+        const loginIdentifier =
+            user.role === 'student'
+                ? user.rollNumber || user.email
+                : user.email;
+
+        return res.json({
+            success: true,
+            user: {
+                id: user._id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                rollNumber: user.rollNumber || undefined,
+                department: user.department || undefined,
+                semester: user.semester ?? undefined,
+                section: user.section || undefined,
+                loginIdentifier,
+                isFirstLogin: user.isFirstLogin,
+                isActive: user.isActive
+            }
+        });
+    } catch (error) {
+        console.error('Get current user error:', error);
+
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error'
+        });
+    }
+};
+
 // ==================== CHANGE PASSWORD (FIRST-LOGIN & REGULAR) ====================
 const changePassword = async (req, res) => {
     try {
+        const tamperedProfileField = PROTECTED_PROFILE_FIELDS.some(
+            (field) =>
+                Object.prototype.hasOwnProperty.call(req.body, field)
+        );
+
+        if (tamperedProfileField) {
+            return res.status(400).json({
+                success: false,
+                message:
+                    'Profile fields cannot be changed through the password change endpoint'
+            });
+        }
+
         const { currentPassword, newPassword } = req.body;
 
         // Check required fields
@@ -251,4 +334,4 @@ const logoutUser = (req, res) => {
     }
 };
 
-export { loginUser, changePassword, logoutUser };
+export { loginUser, getCurrentUser, changePassword, logoutUser };
