@@ -4,6 +4,7 @@ import { parse } from 'csv-parse/sync';
 import userModel from '../models/userModel.js';
 import generatePassword from '../utils/generatePassword.js';
 import generateCredentialCSV from '../utils/generateCredentialCSV.js';
+import { allowedRoles } from '../middleware/authorizeUserManagement.js';
 
 const validRoles = [
     'student',
@@ -12,33 +13,6 @@ const validRoles = [
     'dean',
     'super_admin'
 ];
-
-const allowedRoles = {
-    super_admin: [
-        'student',
-        'advisor',
-        'hod',
-        'dean',
-        'super_admin'
-    ],
-
-    dean: [
-        'student',
-        'advisor',
-        'hod'
-    ],
-
-    hod: [
-        'student',
-        'advisor'
-    ],
-
-    advisor: [
-        'student'
-    ],
-
-    student: []
-};
 
 const bulkCreateUsers = async (req, res) => {
     try {
@@ -49,12 +23,12 @@ const bulkCreateUsers = async (req, res) => {
             });
         }
 
-        const creatorRole = req.user.role;
+        const creatorRole = req.user?.role;
 
         const rolesCreatorCanCreate =
             allowedRoles[creatorRole];
 
-        if (!rolesCreatorCanCreate) {
+        if (!rolesCreatorCanCreate || rolesCreatorCanCreate.length === 0) {
             return res.status(403).json({
                 success: false,
                 message:
@@ -109,48 +83,51 @@ const bulkCreateUsers = async (req, res) => {
         const failedUsers = [];
 
         /*
-         * Track duplicate emails inside the CSV.
-         *
-         * Map:
-         * email -> array of CSV row numbers
+         * Track duplicate emails and duplicate student roll numbers inside the CSV.
          */
         const emailRows = new Map();
+        const rollRows = new Map();
 
         for (
             let index = 0;
             index < records.length;
             index++
         ) {
+            const rowNumber = index + 2;
             const email =
                 records[index].email
                     ?.toLowerCase()
                     .trim();
 
-            if (!email) {
-                continue;
+            if (email) {
+                if (!emailRows.has(email)) {
+                    emailRows.set(email, []);
+                }
+                emailRows.get(email).push(rowNumber);
             }
 
-            const rowNumber = index + 2;
-
-            if (!emailRows.has(email)) {
-                emailRows.set(email, []);
+            const role = records[index].role?.trim();
+            const roll = records[index].rollNumber?.trim();
+            if (role === 'student' && roll) {
+                const lowerRoll = roll.toLowerCase();
+                if (!rollRows.has(lowerRoll)) {
+                    rollRows.set(lowerRoll, []);
+                }
+                rollRows.get(lowerRoll).push(rowNumber);
             }
-
-            emailRows
-                .get(email)
-                .push(rowNumber);
         }
 
-        /*
-         * Store emails that occur more than once.
-         */
         const duplicateEmails = new Set();
-
-        for (
-            const [email, rows] of emailRows
-        ) {
+        for (const [email, rows] of emailRows) {
             if (rows.length > 1) {
                 duplicateEmails.add(email);
+            }
+        }
+
+        const duplicateRollNumbers = new Set();
+        for (const [roll, rows] of rollRows) {
+            if (rows.length > 1) {
+                duplicateRollNumbers.add(roll);
             }
         }
 
@@ -194,14 +171,9 @@ const bulkCreateUsers = async (req, res) => {
                 email.toLowerCase().trim();
 
             /*
-             * Reject duplicate email addresses
-             * appearing multiple times in the same CSV.
+             * Reject duplicate email addresses appearing multiple times in the same CSV.
              */
-            if (
-                duplicateEmails.has(
-                    normalizedEmail
-                )
-            ) {
+            if (duplicateEmails.has(normalizedEmail)) {
                 failedUsers.push({
                     row: rowNumber,
                     email: normalizedEmail,
@@ -229,6 +201,26 @@ const bulkCreateUsers = async (req, res) => {
                     email: normalizedEmail,
                     reason:
                         'Students require department, rollNumber, semester and section'
+                });
+
+                continue;
+            }
+
+            const trimmedRoll = rollNumber?.trim();
+
+            /*
+             * Reject duplicate student roll numbers appearing multiple times in the same CSV.
+             */
+            if (
+                role === 'student' &&
+                trimmedRoll &&
+                duplicateRollNumbers.has(trimmedRoll.toLowerCase())
+            ) {
+                failedUsers.push({
+                    row: rowNumber,
+                    email: normalizedEmail,
+                    reason:
+                        'Duplicate roll number / URN found in CSV'
                 });
 
                 continue;
@@ -311,15 +303,14 @@ const bulkCreateUsers = async (req, res) => {
             }
 
             /*
-             * Check whether email already exists
-             * in MongoDB.
+             * Check whether email already exists in MongoDB.
              */
-            const existingUser =
+            const existingEmailUser =
                 await userModel.findOne({
                     email: normalizedEmail
                 });
 
-            if (existingUser) {
+            if (existingEmailUser) {
                 failedUsers.push({
                     row: rowNumber,
                     email: normalizedEmail,
@@ -331,7 +322,28 @@ const bulkCreateUsers = async (req, res) => {
             }
 
             /*
-             * Generate temporary password
+             * Check whether student roll number / URN already exists in MongoDB.
+             */
+            if (role === 'student' && trimmedRoll) {
+                const existingRollUser =
+                    await userModel.findOne({
+                        rollNumber: trimmedRoll
+                    });
+
+                if (existingRollUser) {
+                    failedUsers.push({
+                        row: rowNumber,
+                        email: normalizedEmail,
+                        reason:
+                            'A user with this roll number / URN already exists'
+                    });
+
+                    continue;
+                }
+            }
+
+            /*
+             * Generate cryptographically secure temporary password
              */
             const temporaryPassword =
                 generatePassword();
@@ -360,7 +372,7 @@ const bulkCreateUsers = async (req, res) => {
                         undefined,
 
                     rollNumber:
-                        rollNumber?.trim() ||
+                        trimmedRoll ||
                         undefined,
 
                     semester:
@@ -377,19 +389,30 @@ const bulkCreateUsers = async (req, res) => {
                 });
 
             /*
+             * Determine role-specific login identifier:
+             * Students use rollNumber (URN); staff use email
+             */
+            const loginIdentifier =
+                user.role === 'student'
+                    ? user.rollNumber
+                    : user.email;
+
+            /*
              * Store generated credentials
              */
             createdUsers.push({
                 id: user._id,
                 name: user.name,
+                loginIdentifier,
                 email: user.email,
                 role: user.role,
+                rollNumber: user.rollNumber || undefined,
                 temporaryPassword
             });
         }
 
         /*
-         * Generate credential CSV
+         * Generate credential CSV with login identifiers
          */
         const credentialCSV =
             generateCredentialCSV(

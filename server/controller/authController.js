@@ -2,34 +2,48 @@ import bcryptjs from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import userModel from '../models/userModel.js';
 
-
 // Create JWT token
 const createToken = (id, role) => {
     return jwt.sign(
         { id, role },
-        process.env.JWT_SECRET
+        process.env.JWT_SECRET,
+        { expiresIn: '7d' }
     );
 };
 
-
 // ==================== LOGIN ====================
-
 const loginUser = async (req, res) => {
     try {
-        const { email, password } = req.body;
+        const identifier = (
+            req.body.identifier ||
+            req.body.rollNumber ||
+            req.body.urn ||
+            req.body.email ||
+            ''
+        ).trim();
+        const { password } = req.body;
 
         // Check required fields
-        if (!email || !password) {
+        if (!identifier || !password) {
             return res.status(400).json({
                 success: false,
-                message: 'Email and password are required'
+                message: 'Login identifier (email or student roll number / URN) and password are required'
             });
         }
 
         // Find pre-registered user
-        const user = await userModel.findOne({
-            email: email.toLowerCase()
-        });
+        // If identifier contains '@', query by email; otherwise query by student rollNumber
+        let user;
+        if (identifier.includes('@')) {
+            user = await userModel.findOne({
+                email: identifier.toLowerCase()
+            });
+        } else {
+            // Case-insensitive lookup by student rollNumber / URN
+            user = await userModel.findOne({
+                rollNumber: { $regex: new RegExp(`^${identifier}$`, 'i') }
+            });
+        }
 
         // User must already exist in database
         if (!user) {
@@ -47,11 +61,8 @@ const loginUser = async (req, res) => {
             });
         }
 
-        // Verify password
-        const isMatch = await bcryptjs.compare(
-            password,
-            user.password
-        );
+        // Verify password hash
+        const isMatch = await bcryptjs.compare(password, user.password);
 
         if (!isMatch) {
             return res.status(401).json({
@@ -61,10 +72,7 @@ const loginUser = async (req, res) => {
         }
 
         // Generate JWT containing user ID and role
-        const token = createToken(
-            user._id.toString(),
-            user.role
-        );
+        const token = createToken(user._id.toString(), user.role);
 
         // Store token in HTTP-only cookie
         res.cookie('token', token, {
@@ -73,6 +81,11 @@ const loginUser = async (req, res) => {
             sameSite: 'strict',
             maxAge: 7 * 24 * 60 * 60 * 1000
         });
+
+        const loginIdentifier =
+            user.role === 'student'
+                ? user.rollNumber || user.email
+                : user.email;
 
         return res.json({
             success: true,
@@ -83,12 +96,14 @@ const loginUser = async (req, res) => {
                 name: user.name,
                 email: user.email,
                 role: user.role,
+                rollNumber: user.rollNumber || undefined,
+                department: user.department || undefined,
+                loginIdentifier,
                 isFirstLogin: user.isFirstLogin
             }
         });
-
     } catch (error) {
-        console.log(error);
+        console.error('Login error:', error);
 
         return res.status(500).json({
             success: false,
@@ -97,9 +112,7 @@ const loginUser = async (req, res) => {
     }
 };
 
-
-// ==================== CHANGE PASSWORD ====================
-
+// ==================== CHANGE PASSWORD (FIRST-LOGIN & REGULAR) ====================
 const changePassword = async (req, res) => {
     try {
         const { currentPassword, newPassword } = req.body;
@@ -112,11 +125,21 @@ const changePassword = async (req, res) => {
             });
         }
 
-        // Validate new password length
+        // Validate new password length policy
         if (newPassword.length < 8) {
             return res.status(400).json({
                 success: false,
                 message: 'New password must be at least 8 characters long'
+            });
+        }
+
+        // Password complexity policy: at least 1 uppercase, 1 lowercase, 1 digit
+        const complexityRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/;
+        if (!complexityRegex.test(newPassword)) {
+            return res.status(400).json({
+                success: false,
+                message:
+                    'New password must contain at least one uppercase letter, one lowercase letter, and one number'
             });
         }
 
@@ -151,7 +174,7 @@ const changePassword = async (req, res) => {
             });
         }
 
-        // Prevent using the same password
+        // Prevent reusing the same password
         const isSamePassword = await bcryptjs.compare(
             newPassword,
             user.password
@@ -164,28 +187,41 @@ const changePassword = async (req, res) => {
             });
         }
 
-        // Hash new password
+        // Hash new password securely
         const salt = await bcryptjs.genSalt(10);
-        const hashedPassword = await bcryptjs.hash(
-            newPassword,
-            salt
-        );
+        const hashedPassword = await bcryptjs.hash(newPassword, salt);
 
-        // Update password
+        // Profile Protection: Strictly update only password and first-login state
+        // Rejects any tampering with name, role, email, rollNumber, department, etc.
         user.password = hashedPassword;
-
-        // First login is now completed
         user.isFirstLogin = false;
 
         await user.save();
 
-        return res.json({
-            success: true,
-            message: 'Password changed successfully'
+        // Refresh authentication token with updated credentials state
+        const refreshedToken = createToken(user._id.toString(), user.role);
+
+        res.cookie('token', refreshedToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+            maxAge: 7 * 24 * 60 * 60 * 1000
         });
 
+        return res.json({
+            success: true,
+            message: 'Password changed successfully',
+            token: refreshedToken,
+            user: {
+                id: user._id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                isFirstLogin: false
+            }
+        });
     } catch (error) {
-        console.log(error);
+        console.error('Change password error:', error);
 
         return res.status(500).json({
             success: false,
@@ -194,9 +230,7 @@ const changePassword = async (req, res) => {
     }
 };
 
-
 // ==================== LOGOUT ====================
-
 const logoutUser = (req, res) => {
     try {
         res.clearCookie('token', {
@@ -209,7 +243,6 @@ const logoutUser = (req, res) => {
             success: true,
             message: 'Logged out successfully'
         });
-
     } catch (error) {
         return res.status(500).json({
             success: false,
@@ -218,9 +251,4 @@ const logoutUser = (req, res) => {
     }
 };
 
-
-export {
-    loginUser,
-    changePassword,
-    logoutUser
-};
+export { loginUser, changePassword, logoutUser };

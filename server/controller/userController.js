@@ -22,7 +22,13 @@ const createUser = async (req, res) => {
             });
         }
 
-        const validRoles = ['student', 'advisor', 'hod', 'dean', 'super_admin'];
+        const validRoles = [
+            'student',
+            'advisor',
+            'hod',
+            'dean',
+            'super_admin'
+        ];
         if (!validRoles.includes(role)) {
             return res.status(400).json({
                 success: false,
@@ -30,40 +36,68 @@ const createUser = async (req, res) => {
             });
         }
 
+        // Student-specific required fields
+        if (role === 'student' && (!rollNumber || !rollNumber.trim())) {
+            return res.status(400).json({
+                success: false,
+                message: 'Student accounts require a roll number / URN'
+            });
+        }
+
+        const normalizedEmail = email.toLowerCase().trim();
+
         // Check if email already exists
-        const existingUser = await userModel.findOne({
-            email: email.toLowerCase()
+        const existingEmail = await userModel.findOne({
+            email: normalizedEmail
         });
 
-        if (existingUser) {
+        if (existingEmail) {
             return res.status(409).json({
                 success: false,
                 message: 'A user with this email already exists'
             });
         }
 
-        // Generate temporary password
+        // Check if student roll number / URN already exists
+        if (role === 'student' && rollNumber) {
+            const existingRoll = await userModel.findOne({
+                rollNumber: rollNumber.trim()
+            });
+
+            if (existingRoll) {
+                return res.status(409).json({
+                    success: false,
+                    message:
+                        'A user with this roll number / URN already exists'
+                });
+            }
+        }
+
+        // Cryptographically secure temporary password generation
         const temporaryPassword = generatePassword();
 
-        // Hash password before storing
-        const hashedPassword = await bcryptjs.hash(
-            temporaryPassword,
-            10
-        );
+        // Hash password before storing in MongoDB
+        const hashedPassword = await bcryptjs.hash(temporaryPassword, 10);
 
-        // Create user
+        // Create user with mandatory first login flag
         const user = await userModel.create({
             name: name.trim(),
-            email: email.toLowerCase().trim(),
+            email: normalizedEmail,
             password: hashedPassword,
             role,
-            department,
-            rollNumber,
-            semester,
-            section,
+            department: department?.trim() || undefined,
+            rollNumber: rollNumber?.trim() || undefined,
+            semester: semester ? Number(semester) : undefined,
+            section: section?.trim() || undefined,
             isFirstLogin: true,
             isActive: true
         });
+
+        // Determine role-specific login identifier
+        const loginIdentifier =
+            user.role === 'student'
+                ? user.rollNumber
+                : user.email;
 
         return res.status(201).json({
             success: true,
@@ -72,11 +106,14 @@ const createUser = async (req, res) => {
                 id: user._id,
                 name: user.name,
                 email: user.email,
-                role: user.role
+                role: user.role,
+                rollNumber: user.rollNumber,
+                loginIdentifier,
+                isFirstLogin: user.isFirstLogin
             },
+            loginIdentifier,
             temporaryPassword
         });
-
     } catch (error) {
         console.error('Create user error:', error);
 
@@ -87,6 +124,4 @@ const createUser = async (req, res) => {
     }
 };
 
-export {
-    createUser
-};
+export { createUser };
