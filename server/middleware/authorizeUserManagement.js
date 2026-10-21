@@ -3,8 +3,7 @@ const allowedRoles = {
         'student',
         'advisor',
         'hod',
-        'dean',
-        'super_admin'
+        'dean'
     ],
 
     dean: [
@@ -25,14 +24,28 @@ const allowedRoles = {
     student: []
 };
 
+const authorizeUserCreationAccess = (req, res, next) => {
+    const creatorRole = req.user?.role;
+    const rolesCreatorCanCreate = allowedRoles[creatorRole];
+
+    if (!rolesCreatorCanCreate || rolesCreatorCanCreate.length === 0) {
+        return res.status(403).json({
+            success: false,
+            message: 'You are not authorized to create users'
+        });
+    }
+
+    next();
+};
+
 const authorizeUserManagement = (req, res, next) => {
-    const creatorRole = req.user.role;
+    const creatorRole = req.user?.role;
     const requestedRole = req.body.role;
 
     const rolesCreatorCanCreate =
         allowedRoles[creatorRole];
 
-    if (!rolesCreatorCanCreate) {
+    if (!rolesCreatorCanCreate || rolesCreatorCanCreate.length === 0) {
         return res.status(403).json({
             success: false,
             message: 'You are not authorized to create users'
@@ -57,4 +70,5 @@ const authorizeUserManagement = (req, res, next) => {
     next();
 };
 
+export { allowedRoles, authorizeUserCreationAccess };
 export default authorizeUserManagement;

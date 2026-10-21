@@ -20,6 +20,9 @@
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js",
-    "seed:users": "node scripts/seedUsers.js"
+    "seed:users": "node scripts/seedUsers.js",
+    "seed:dev": "node scripts/seedDevTestData.js",
+    "seed:fresh": "node scripts/seedFreshTestPack.js",
+    "verify:dev": "node scripts/verifyDevCredentials.js"
   }
 }
