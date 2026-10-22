@@ -59,6 +59,11 @@ export async function apiRequest(path, options = {}) {
     }
 
     if (!response.ok) {
+        if (response.status === 401 && token) {
+            setAuthToken(null);
+            setStoredUser(null);
+            window.dispatchEvent(new CustomEvent('cms:session-expired'));
+        }
         const message =
             data?.message ||
             `Request failed (${response.status})`;
@@ -92,6 +97,7 @@ export const authApi = {
 
 export const complaintsApi = {
     getCategories: () => apiRequest('/api/complaints/categories'),
+    getDepartments: () => apiRequest('/api/complaints/departments'),
     create: (payload) =>
         apiRequest('/api/complaints/create', {
             method: 'POST',

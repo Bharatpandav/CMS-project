@@ -167,6 +167,9 @@ const getCurrentUser = async (req, res) => {
                 department: user.department || undefined,
                 semester: user.semester ?? undefined,
                 section: user.section || undefined,
+                programme: user.programme || undefined,
+                assignedAdvisor: user.assignedAdvisor || undefined,
+                dateOfBirth: user.dateOfBirth || undefined,
                 loginIdentifier,
                 isFirstLogin: user.isFirstLogin,
                 isActive: user.isActive

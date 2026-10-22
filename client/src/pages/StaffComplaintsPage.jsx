@@ -1,7 +1,10 @@
-import { useMemo, useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLocation, useOutletContext } from 'react-router-dom';
+import { PageHeader } from '../components/PageHeader.jsx';
 import { RecentComplaintsTable } from '../components/RecentComplaintsTable.jsx';
 import { useComplaintsData } from '../hooks/useComplaintsData.js';
+import { useListUiRestore } from '../hooks/useListUiRestore.js';
+import { saveListUiState } from '../utils/navigationPaths.js';
 
 const STATUS_OPTIONS = [
     { value: '', label: 'All statuses' },
@@ -14,8 +17,28 @@ const STATUS_OPTIONS = [
 ];
 
 export function StaffComplaintsPage() {
+    const location = useLocation();
+    const listStateKey = location.pathname;
+    const dashboardTo = location.pathname.startsWith('/management')
+        ? '/management/dashboard'
+        : '/app/dashboard';
     const { search = '' } = useOutletContext() || {};
     const [statusFilter, setStatusFilter] = useState('');
+
+    const restoreListUi = useCallback((saved) => {
+        if (saved.statusFilter !== undefined) {
+            setStatusFilter(saved.statusFilter);
+        }
+    }, []);
+
+    useListUiRestore(listStateKey, { onRestore: restoreListUi });
+
+    useEffect(() => {
+        saveListUiState(listStateKey, {
+            statusFilter,
+            scrollY: window.scrollY
+        });
+    }, [listStateKey, statusFilter]);
     const { complaints, loading, error, reload } = useComplaintsData({
         limit: 100,
         status: statusFilter || undefined
@@ -35,10 +58,14 @@ export function StaffComplaintsPage() {
 
     return (
         <div className="page-stack">
-            <header className="page-header">
-                <h1>Complaints</h1>
-                <p>Complaints you are authorized to view and manage.</p>
-            </header>
+            <PageHeader
+                breadcrumbs={[
+                    { to: dashboardTo, label: 'Dashboard' },
+                    { label: 'Complaints' }
+                ]}
+                title="Complaints"
+                description="Complaints you are authorized to view and manage."
+            />
 
             <div className="staff-filters">
                 <label>
@@ -70,6 +97,8 @@ export function StaffComplaintsPage() {
                     <RecentComplaintsTable
                         complaints={filtered}
                         showViewAll={false}
+                        listStateKey={listStateKey}
+                        onBeforeDetailNavigate={() => ({ statusFilter })}
                     />
                 )}
             </article>

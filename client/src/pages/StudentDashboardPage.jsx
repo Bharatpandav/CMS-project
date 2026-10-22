@@ -23,7 +23,7 @@ export function StudentDashboardPage() {
                         My Complaints
                     </Link>
                     . Update your password from{' '}
-                    <Link to="/student/profile" className="link-teal">
+                    <Link to="/app/profile" className="link-teal">
                         My Profile
                     </Link>
                     .

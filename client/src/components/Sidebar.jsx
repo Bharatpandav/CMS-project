@@ -12,10 +12,7 @@ import {
     IconUsers
 } from './icons.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
-import {
-    getStaffBasePath,
-    isAdminStaffRole
-} from '../utils/staffRoles.js';
+import { getStaffBasePath } from '../utils/staffRoles.js';
 
 function NavItem({ to, icon, label, end, onNavigate }) {
     return (
@@ -63,7 +60,7 @@ function StudentNav({ onNavigate }) {
                 onNavigate={onNavigate}
             />
             <NavItem
-                to="/student/profile"
+                to="/app/profile"
                 icon={<IconUsers />}
                 label="My Profile"
                 onNavigate={onNavigate}
@@ -208,7 +205,7 @@ export function Sidebar({ mobileOpen, onClose }) {
 
     const handleLogout = async () => {
         await logout();
-        navigate('/');
+        navigate('/', { replace: true });
     };
 
     const closeMobile = () => onClose?.();

@@ -1,38 +1,17 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { authApi } from '../api/client.js';
 import { ChangePasswordCard } from '../components/ChangePasswordCard.jsx';
-
-function ProfileRow({ icon, label, value }) {
-    return (
-        <div className="profile-row">
-            <span className="profile-row__icon" aria-hidden="true">{icon}</span>
-            <div className="profile-row__content">
-                <span className="profile-row__label">{label}</span>
-                <span className="profile-row__value">{value}</span>
-            </div>
-        </div>
-    );
-}
-
-function formatStatus(isActive) {
-    if (isActive === true) return 'Active';
-    if (isActive === false) return 'Inactive';
-    return 'Not available';
-}
-
-function formatRole(role) {
-    const labels = {
-        student: 'Student',
-        advisor: 'Advisor',
-        hod: 'HOD',
-        dean: 'Dean',
-        super_admin: 'Super Admin'
-    };
-    return labels[role] || role || 'Not available';
-}
+import { ProfileInfoCard } from '../components/ProfileInfoCard.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
+import { PageHeader } from '../components/PageHeader.jsx';
+import { getProfileHomePath } from '../utils/profileFieldConfig.js';
 
 export function MyProfilePage() {
+    const { user } = useAuth();
+    const location = useLocation();
+    const homePath = getProfileHomePath(location.pathname);
+
     const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -54,104 +33,29 @@ export function MyProfilePage() {
         loadProfile();
     }, []);
 
-    const na = 'Not available';
+    if (user?.isFirstLogin) {
+        return <Navigate to="/change-password" replace />;
+    }
 
     return (
         <div className="profile-page">
-            <nav className="breadcrumb" aria-label="Breadcrumb">
-                <Link to="/student/dashboard">Home</Link>
-                <span aria-hidden="true">→</span>
-                <span>My Profile</span>
-            </nav>
-
-            <header className="page-header">
-                <h1>My Profile</h1>
-                <p>
-                    View your registered details and update your password.
-                </p>
-            </header>
-
-            {error ? (
-                <div className="inline-alert">
-                    <span>{error}</span>
-                    <button type="button" onClick={loadProfile}>
-                        Retry
-                    </button>
-                </div>
-            ) : null}
+            <PageHeader
+                className="profile-page__header"
+                breadcrumbs={[
+                    { to: homePath, label: 'Dashboard' },
+                    { label: 'My Profile' }
+                ]}
+                title="My Profile"
+                description="View your registered details and update your password."
+            />
 
             <div className="profile-layout">
-                <article className="profile-card">
-                    <header className="profile-card__header">
-                        <h2>Profile Information</h2>
-                        <p>Registered details (read-only)</p>
-                    </header>
-
-                    {loading ? (
-                        <p className="panel__loading">Loading profile…</p>
-                    ) : (
-                        <div className="profile-rows">
-                            <ProfileRow
-                                icon="🎓"
-                                label="URN / Roll Number"
-                                value={profile?.rollNumber || na}
-                            />
-                            <ProfileRow
-                                icon="👤"
-                                label="Full Name"
-                                value={profile?.name || na}
-                            />
-                            <ProfileRow
-                                icon="✉️"
-                                label="Email Address"
-                                value={profile?.email || na}
-                            />
-                            <ProfileRow
-                                icon="🏢"
-                                label="Department"
-                                value={profile?.department || na}
-                            />
-                            <ProfileRow
-                                icon="📚"
-                                label="Programme"
-                                value={na}
-                            />
-                            <ProfileRow
-                                icon="📅"
-                                label="Year / Semester"
-                                value={
-                                    profile?.semester != null
-                                        ? `Semester ${profile.semester}`
-                                        : na
-                                }
-                            />
-                            {profile?.section ? (
-                                <ProfileRow
-                                    icon="🔤"
-                                    label="Section"
-                                    value={profile.section}
-                                />
-                            ) : (
-                                <ProfileRow
-                                    icon="🔤"
-                                    label="Section"
-                                    value={na}
-                                />
-                            )}
-                            <ProfileRow
-                                icon="🛡️"
-                                label="Role"
-                                value={formatRole(profile?.role)}
-                            />
-                            <ProfileRow
-                                icon="✅"
-                                label="Account Status"
-                                value={formatStatus(profile?.isActive)}
-                            />
-                        </div>
-                    )}
-                </article>
-
+                <ProfileInfoCard
+                    profile={profile}
+                    loading={loading}
+                    error={error}
+                    onRetry={loadProfile}
+                />
                 <ChangePasswordCard />
             </div>
         </div>

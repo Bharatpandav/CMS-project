@@ -77,6 +77,7 @@ export function AdminLoginPage() {
                 <label className="password-label">
                     Email
                     <input
+                        className="ui-input"
                         type="email"
                         value={identifier}
                         onChange={(e) => setIdentifier(e.target.value)}

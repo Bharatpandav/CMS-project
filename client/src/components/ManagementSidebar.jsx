@@ -33,7 +33,7 @@ export function ManagementSidebar({ mobileOpen, onClose }) {
 
     const handleLogout = async () => {
         await logout();
-        navigate('/');
+        navigate('/', { replace: true });
     };
 
     const closeMobile = () => onClose?.();

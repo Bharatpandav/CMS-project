@@ -1,32 +1,77 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from './components/ProtectedRoute.jsx';
 import { RequirePasswordChanged } from './components/RequirePasswordChanged.jsx';
-import { DashboardLayout } from './layouts/DashboardLayout.jsx';
+import { RoleGate } from './components/RoleGate.jsx';
 import { SimpleAuthLayout } from './layouts/SimpleAuthLayout.jsx';
+import { PortalShellLayout } from './layouts/PortalShellLayout.jsx';
 import { AllComplaintsPage } from './pages/AllComplaintsPage.jsx';
 import { BulkRegistrationPage } from './pages/BulkRegistrationPage.jsx';
 import { CategoriesPage } from './pages/CategoriesPage.jsx';
 import { ChangePasswordPage } from './pages/ChangePasswordPage.jsx';
 import { ComplaintDetailPage } from './pages/ComplaintDetailPage.jsx';
-import { DashboardPage } from './pages/DashboardPage.jsx';
 import { DepartmentsPage } from './pages/DepartmentsPage.jsx';
 import { HomePage } from './pages/HomePage.jsx';
 import { PlaceholderPage } from './pages/PlaceholderPage.jsx';
-import { PortalPage } from './pages/PortalPage.jsx';
 import { RegisterUserPage } from './pages/RegisterUserPage.jsx';
 import { MyProfilePage } from './pages/MyProfilePage.jsx';
-import { StudentDashboardPage } from './pages/StudentDashboardPage.jsx';
 import { StudentComplaintsPage } from './pages/StudentComplaintsPage.jsx';
 import { StudentSupportPage } from './pages/StudentSupportPage.jsx';
 import { RegisterComplaintPage } from './pages/RegisterComplaintPage.jsx';
-import { staffRoleRoutes } from './routes/StaffRoleRoutes.jsx';
-import { ADMIN_STAFF_ROLES } from './utils/staffRoles.js';
-import { MANAGEMENT_PORTAL_ROLES } from './utils/managementAccess.js';
-import { ManagementLayout } from './layouts/ManagementLayout.jsx';
-import { ManagementDashboardPage } from './pages/ManagementDashboardPage.jsx';
+import { StaffComplaintDetailPage } from './pages/StaffComplaintDetailPage.jsx';
+import { StaffComplaintsPage } from './pages/StaffComplaintsPage.jsx';
 import { ManagementUsersPage } from './pages/ManagementUsersPage.jsx';
 import { ManagementImportExportPage } from './pages/ManagementImportExportPage.jsx';
 import { ManagementRolesPage } from './pages/ManagementRolesPage.jsx';
+import { ManagementDashboardPage } from './pages/ManagementDashboardPage.jsx';
+import { ManagementComplaintsPage } from './pages/ManagementComplaintsPage.jsx';
+import { ManagementComplaintDetailPage } from './pages/ManagementComplaintDetailPage.jsx';
+import { ManagementLayout } from './layouts/ManagementLayout.jsx';
+import { UnifiedDashboardPage } from './pages/UnifiedDashboardPage.jsx';
+import { StaffRouteGuard } from './components/StaffRouteGuard.jsx';
+import { ADMIN_STAFF_ROLES } from './utils/staffRoles.js';
+import { MANAGEMENT_PORTAL_ROLES } from './utils/managementAccess.js';
+import { UNIFIED_DASHBOARD_PATH } from './utils/appPaths.js';
+import { NotFoundPage } from './pages/NotFoundPage.jsx';
+
+function staffDetail(role) {
+    return (
+        <StaffRouteGuard expectedRole={role}>
+            <StaffComplaintDetailPage />
+        </StaffRouteGuard>
+    );
+}
+
+function staffList(role) {
+    return (
+        <StaffRouteGuard expectedRole={role}>
+            <StaffComplaintsPage />
+        </StaffRouteGuard>
+    );
+}
+
+function staffCategories(role) {
+    return (
+        <StaffRouteGuard expectedRole={role}>
+            <CategoriesPage />
+        </StaffRouteGuard>
+    );
+}
+
+const legacyDashboardRedirects = [
+    '/student/dashboard',
+    '/advisor/dashboard',
+    '/hod/dashboard',
+    '/dean/dashboard',
+    '/vc/dashboard',
+    '/dashboard',
+    '/portal'
+].map((path) => (
+    <Route
+        key={path}
+        path={path}
+        element={<Navigate to={UNIFIED_DASHBOARD_PATH} replace />}
+    />
+));
 
 function App() {
     return (
@@ -54,73 +99,200 @@ function App() {
                 </Route>
 
                 <Route
-                    path="/portal"
                     element={
                         <ProtectedRoute>
                             <RequirePasswordChanged>
-                                <PortalPage />
-                            </RequirePasswordChanged>
-                        </ProtectedRoute>
-                    }
-                />
-
-                <Route
-                    element={
-                        <ProtectedRoute roles={['student']}>
-                            <RequirePasswordChanged>
-                                <DashboardLayout />
+                                <PortalShellLayout />
                             </RequirePasswordChanged>
                         </ProtectedRoute>
                     }
                 >
                     <Route
-                        path="/student/dashboard"
-                        element={<StudentDashboardPage />}
+                        path={UNIFIED_DASHBOARD_PATH}
+                        element={<UnifiedDashboardPage />}
                     />
+
+                    {legacyDashboardRedirects}
+
                     <Route
                         path="/student/complaints"
-                        element={<StudentComplaintsPage />}
+                        element={
+                            <RoleGate roles={['student']}>
+                                <StudentComplaintsPage />
+                            </RoleGate>
+                        }
                     />
                     <Route
                         path="/student/complaints/register"
-                        element={<RegisterComplaintPage />}
+                        element={
+                            <RoleGate roles={['student']}>
+                                <RegisterComplaintPage />
+                            </RoleGate>
+                        }
                     />
                     <Route
                         path="/student/track"
                         element={
-                            <StudentComplaintsPage title="Track Status" />
+                            <RoleGate roles={['student']}>
+                                <StudentComplaintsPage title="Track Status" />
+                            </RoleGate>
                         }
                     />
+                    <Route path="/app/profile" element={<MyProfilePage />} />
                     <Route
                         path="/student/profile"
-                        element={<MyProfilePage />}
+                        element={<Navigate to="/app/profile" replace />}
                     />
                     <Route
                         path="/student/support"
-                        element={<StudentSupportPage />}
+                        element={
+                            <RoleGate roles={['student']}>
+                                <StudentSupportPage />
+                            </RoleGate>
+                        }
                     />
                     <Route
                         path="/student/complaints/:id"
-                        element={<ComplaintDetailPage />}
+                        element={
+                            <RoleGate roles={['student']}>
+                                <ComplaintDetailPage />
+                            </RoleGate>
+                        }
                     />
-                </Route>
 
-                <Route
-                    element={
-                        <ProtectedRoute
-                            roles={ADMIN_STAFF_ROLES}
-                            loginTo="/?admin=1"
-                        >
-                            <RequirePasswordChanged>
-                                <DashboardLayout />
-                            </RequirePasswordChanged>
-                        </ProtectedRoute>
-                    }
-                >
-                    {staffRoleRoutes('/advisor', 'advisor')}
-                    {staffRoleRoutes('/hod', 'hod')}
-                    {staffRoleRoutes('/dean', 'dean')}
-                    {staffRoleRoutes('/vc', 'super_admin')}
+                    <Route
+                        path="/advisor/complaints"
+                        element={staffList('advisor')}
+                    />
+                    <Route
+                        path="/advisor/complaints/:id"
+                        element={staffDetail('advisor')}
+                    />
+                    <Route
+                        path="/advisor/categories"
+                        element={staffCategories('advisor')}
+                    />
+
+                    <Route
+                        path="/hod/complaints"
+                        element={staffList('hod')}
+                    />
+                    <Route
+                        path="/hod/complaints/:id"
+                        element={staffDetail('hod')}
+                    />
+                    <Route
+                        path="/hod/categories"
+                        element={staffCategories('hod')}
+                    />
+
+                    <Route
+                        path="/dean/complaints"
+                        element={staffList('dean')}
+                    />
+                    <Route
+                        path="/dean/complaints/:id"
+                        element={staffDetail('dean')}
+                    />
+                    <Route
+                        path="/dean/categories"
+                        element={staffCategories('dean')}
+                    />
+
+                    <Route
+                        path="/vc/complaints"
+                        element={staffList('super_admin')}
+                    />
+                    <Route
+                        path="/vc/complaints/:id"
+                        element={staffDetail('super_admin')}
+                    />
+                    <Route
+                        path="/vc/categories"
+                        element={staffCategories('super_admin')}
+                    />
+
+                    <Route
+                        path="/users"
+                        element={
+                            <RoleGate roles={['super_admin']}>
+                                <Navigate
+                                    to="/management/users"
+                                    replace
+                                />
+                            </RoleGate>
+                        }
+                    />
+                    <Route
+                        path="/users/register"
+                        element={
+                            <RoleGate roles={['super_admin']}>
+                                <RegisterUserPage />
+                            </RoleGate>
+                        }
+                    />
+                    <Route
+                        path="/users/bulk"
+                        element={
+                            <RoleGate roles={['super_admin']}>
+                                <BulkRegistrationPage />
+                            </RoleGate>
+                        }
+                    />
+                    <Route
+                        path="/departments"
+                        element={
+                            <RoleGate roles={['super_admin']}>
+                                <DepartmentsPage />
+                            </RoleGate>
+                        }
+                    />
+                    <Route
+                        path="/complaints"
+                        element={
+                            <RoleGate roles={['super_admin']}>
+                                <AllComplaintsPage />
+                            </RoleGate>
+                        }
+                    />
+                    <Route
+                        path="/complaints/categories"
+                        element={
+                            <RoleGate roles={['super_admin']}>
+                                <CategoriesPage />
+                            </RoleGate>
+                        }
+                    />
+                    <Route
+                        path="/complaints/:id"
+                        element={
+                            <RoleGate roles={ADMIN_STAFF_ROLES}>
+                                <ComplaintDetailPage />
+                            </RoleGate>
+                        }
+                    />
+                    <Route
+                        path="/audit-logs"
+                        element={
+                            <RoleGate roles={['super_admin']}>
+                                <PlaceholderPage
+                                    title="Audit Logs"
+                                    description="Global audit log export is not available. Per-complaint logs are shown on the complaint detail page."
+                                />
+                            </RoleGate>
+                        }
+                    />
+                    <Route
+                        path="/settings"
+                        element={
+                            <RoleGate roles={['super_admin']}>
+                                <PlaceholderPage
+                                    title="Settings"
+                                    description="System settings management is not implemented on the backend yet."
+                                />
+                            </RoleGate>
+                        }
+                    />
                 </Route>
 
                 <Route
@@ -156,79 +328,56 @@ function App() {
                         element={<DepartmentsPage />}
                     />
                     <Route
-                        path="/management/roles"
-                        element={<ManagementRolesPage />}
-                    />
-                    <Route
                         path="/management/import-export"
                         element={<ManagementImportExportPage />}
                     />
-                </Route>
-
-                <Route
-                    element={
-                        <ProtectedRoute
-                            roles={['super_admin']}
-                            loginTo="/?admin=1"
-                        >
-                            <RequirePasswordChanged>
-                                <DashboardLayout />
-                            </RequirePasswordChanged>
-                        </ProtectedRoute>
-                    }
-                >
                     <Route
-                        path="/dashboard"
-                        element={<DashboardPage />}
-                    />
-                    <Route
-                        path="/users"
+                        path="/management/roles"
                         element={
-                            <PlaceholderPage
-                                title="All Users"
-                                description="A paginated user list API is not available on the backend yet. Use Register User or Bulk Registration to add accounts."
-                            />
+                            <RoleGate roles={['super_admin']}>
+                                <ManagementRolesPage />
+                            </RoleGate>
                         }
                     />
                     <Route
-                        path="/users/register"
-                        element={<RegisterUserPage />}
+                        path="/management/complaints"
+                        element={<ManagementComplaintsPage />}
                     />
                     <Route
-                        path="/users/bulk"
-                        element={<BulkRegistrationPage />}
+                        path="/management/complaints/:id"
+                        element={<ManagementComplaintDetailPage />}
                     />
-                    <Route path="/departments" element={<DepartmentsPage />} />
-                    <Route path="/complaints" element={<AllComplaintsPage />} />
                     <Route
-                        path="/complaints/categories"
+                        path="/management/categories"
                         element={<CategoriesPage />}
                     />
                     <Route
-                        path="/complaints/:id"
-                        element={<ComplaintDetailPage />}
-                    />
-                    <Route
-                        path="/audit-logs"
+                        path="/management/audit-logs"
                         element={
                             <PlaceholderPage
                                 title="Audit Logs"
-                                description="Global audit log export is not available. Per-complaint logs are shown on the complaint detail page."
+                                description="Global audit log export is not available. Per-complaint logs are shown on complaint detail pages."
                             />
                         }
                     />
                     <Route
-                        path="/settings"
+                        path="/management/settings"
                         element={
-                            <PlaceholderPage
-                                title="Settings"
-                                description="System settings management is not implemented on the backend yet."
-                            />
+                            <RoleGate roles={['super_admin']}>
+                                <PlaceholderPage
+                                    title="Settings"
+                                    description="System settings management is not implemented on the backend yet."
+                                />
+                            </RoleGate>
                         }
+                    />
+                    <Route
+                        path="/management/profile"
+                        element={<MyProfilePage />}
                     />
                 </Route>
 
-                <Route path="*" element={<Navigate to="/" replace />} />
+                <Route path="*" element={<NotFoundPage />} />
             </Routes>
         </BrowserRouter>
     );
