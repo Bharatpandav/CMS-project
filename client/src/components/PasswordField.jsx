@@ -1,21 +1,5 @@
 import { useState } from 'react';
-
-function ToggleIcon({ open }) {
-    if (open) {
-        return (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
-                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
-                <line x1="1" y1="1" x2="23" y2="23" />
-            </svg>
-        );
-    }
-    return (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
-            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-            <circle cx="12" cy="12" r="3" />
-        </svg>
-    );
-}
+import { Eye, EyeOff } from 'lucide-react';
 
 export function PasswordField({
     id,
@@ -24,37 +8,53 @@ export function PasswordField({
     onChange,
     autoComplete,
     disabled,
-    error
+    error,
+    placeholder,
+    required = true
 }) {
     const [visible, setVisible] = useState(false);
 
+    const shellClass = [
+        'password-field',
+        'ui-input-shell',
+        error ? 'ui-input-shell--error' : ''
+    ]
+        .filter(Boolean)
+        .join(' ');
+
     return (
-        <label className="password-label" htmlFor={id}>
+        <label className="ui-label password-label" htmlFor={id}>
             {label}
-            <span className="password-field">
+            <span className={shellClass}>
                 <input
                     id={id}
+                    className="password-field__input"
                     type={visible ? 'text' : 'password'}
                     value={value}
                     onChange={onChange}
                     autoComplete={autoComplete}
                     disabled={disabled}
+                    placeholder={placeholder}
                     aria-invalid={Boolean(error)}
                     aria-describedby={error ? `${id}-error` : undefined}
-                    required
+                    required={required}
                 />
                 <button
                     type="button"
-                    className="password-toggle"
+                    className="password-field__toggle"
                     onClick={() => setVisible((v) => !v)}
                     aria-label={visible ? 'Hide password' : 'Show password'}
-                    tabIndex={-1}
+                    disabled={disabled}
                 >
-                    <ToggleIcon open={visible} />
+                    {visible ? (
+                        <EyeOff size={18} strokeWidth={1.75} aria-hidden />
+                    ) : (
+                        <Eye size={18} strokeWidth={1.75} aria-hidden />
+                    )}
                 </button>
             </span>
             {error ? (
-                <span id={`${id}-error`} className="field-error" role="alert">
+                <span id={`${id}-error`} className="ui-field-error" role="alert">
                     {error}
                 </span>
             ) : null}

@@ -92,16 +92,10 @@ export function TopNav({ onMenuClick, search, onSearchChange }) {
                     {dropdownOpen ? (
                         <div className="topnav__dropdown">
                             <Link
-                                to={
-                                    user?.role === 'student'
-                                        ? '/student/profile'
-                                        : '/change-password'
-                                }
+                                to="/app/profile"
                                 onClick={() => setDropdownOpen(false)}
                             >
-                                {user?.role === 'student'
-                                    ? 'My profile'
-                                    : 'Profile / password'}
+                                My Profile
                             </Link>
                             <button
                                 type="button"

@@ -1,9 +1,4 @@
 .public-home {
-    --public-navy: #0f2744;
-    --public-teal: #0d9488;
-    --public-teal-dark: #0f766e;
-    --public-bg: #f4f9fc;
-    --public-surface: #ffffff;
     color: var(--public-navy);
     background: var(--public-bg);
     min-height: 100vh;
@@ -24,15 +19,17 @@
     position: sticky;
     top: 0;
     z-index: 30;
+    width: 100%;
     background: var(--public-surface);
-    border-bottom: 1px solid #e2e8f0;
-    box-shadow: 0 4px 18px rgba(15, 39, 68, 0.04);
+    border-bottom: 1px solid var(--color-border);
+    box-shadow: none;
 }
 
 .public-header__inner {
-    max-width: 1180px;
-    margin: 0 auto;
-    padding: 0.85rem 1.25rem;
+    width: 100%;
+    max-width: var(--layout-max-width);
+    margin-inline: auto;
+    padding: 0.85rem var(--layout-padding-x);
     display: flex;
     align-items: center;
     gap: 1rem;
@@ -50,8 +47,8 @@
 .public-brand__shield {
     width: 40px;
     height: 40px;
-    border-radius: 10px;
-    background: linear-gradient(135deg, var(--public-teal), #0891b2);
+    border-radius: var(--radius-md);
+    background: var(--brand-navy);
     color: #fff;
     display: grid;
     place-items: center;
@@ -69,12 +66,13 @@
 .public-nav-toggle {
     display: none;
     margin-left: auto;
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--color-border);
     background: #fff;
-    border-radius: 8px;
-    width: 40px;
-    height: 40px;
+    border-radius: var(--radius-pill);
+    width: 44px;
+    height: 44px;
     cursor: pointer;
+    place-items: center;
 }
 
 .public-nav {
@@ -97,51 +95,43 @@
 
 .public-nav button:hover,
 .public-nav button:focus-visible {
-    background: #eef6ff;
+    background: var(--color-tertiary);
     color: var(--public-navy);
     outline: none;
 }
 
 .public-header__login {
-    background: var(--public-teal) !important;
-    color: #fff !important;
-    font-weight: 600;
+    background: var(--color-primary) !important;
+    color: var(--color-primary-contrast) !important;
+    font-weight: 500;
     margin-left: 0.35rem;
+    border-radius: var(--radius-pill) !important;
+    box-shadow: none !important;
 }
 
 .public-header__login:hover,
 .public-header__login:focus-visible {
-    background: var(--public-teal-dark) !important;
-    color: #fff !important;
+    background: #262626 !important;
+    color: var(--color-primary-contrast) !important;
 }
 
 .hero {
-    max-width: 1180px;
-    margin: 0 auto;
-    padding: 2.5rem 1.25rem 2rem;
-    display: grid;
-    grid-template-columns: 1.05fr 0.95fr;
-    gap: 2rem;
-    align-items: center;
+    width: 100%;
+    max-width: var(--layout-max-width);
+    margin-inline: auto;
+    padding: clamp(3rem, 6vw, 5rem) var(--layout-padding-x)
+        clamp(2rem, 4vw, 3rem);
 }
 
 .hero h1 {
     margin: 0 0 1rem;
-    font-size: clamp(1.85rem, 4vw, 2.65rem);
-    line-height: 1.15;
-    color: var(--public-navy);
-}
-
-.hero h1 span {
-    display: block;
-    color: var(--public-teal-dark);
+    max-width: min(38rem, 100%);
 }
 
 .hero__lead {
     margin: 0 0 1.5rem;
-    color: #475569;
-    font-size: 1.05rem;
-    max-width: 34rem;
+    color: var(--color-text-muted);
+    max-width: 40rem;
 }
 
 .hero__actions {
@@ -151,9 +141,10 @@
 }
 
 .btn {
-    border-radius: 10px;
-    padding: 0.7rem 1.15rem;
-    font-weight: 600;
+    border-radius: var(--radius-pill);
+    padding: 0.65rem 1.15rem;
+    min-height: 40px;
+    font-weight: 500;
     font: inherit;
     cursor: pointer;
     border: 1px solid transparent;
@@ -161,17 +152,21 @@
 }
 
 .btn:focus-visible {
-    outline: 2px solid var(--public-teal);
-    outline-offset: 2px;
+    outline: none;
+    box-shadow: var(--focus-ring);
 }
 
 .btn--primary {
-    background: var(--public-teal);
+    background: var(--brand-blue);
+    border: 1px solid var(--brand-blue);
     color: #fff;
+    box-shadow: none;
+    font-weight: 600;
 }
 
 .btn--primary:hover {
-    background: var(--public-teal-dark);
+    background: var(--brand-blue-hover);
+    border-color: var(--brand-blue-hover);
 }
 
 .btn--outline {
@@ -222,7 +217,7 @@
     place-items: center;
     font-weight: 800;
     color: #fff;
-    background: linear-gradient(135deg, var(--public-teal), #0891b2);
+    background: var(--color-primary);
 }
 
 .admin-back-home {
@@ -270,29 +265,34 @@
 }
 
 .features {
-    max-width: 1180px;
-    margin: 0 auto;
-    padding: 0 1.25rem 2rem;
+    width: 100%;
+    max-width: var(--layout-max-width);
+    margin-inline: auto;
+    padding: 0 var(--layout-padding-x) var(--layout-section-y);
 }
 
 .features__grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 1rem;
+    gap: var(--layout-gap);
+    align-items: stretch;
 }
 
 .feature-card {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
     background: var(--public-surface);
-    border: 1px solid #e2e8f0;
-    border-radius: 14px;
-    padding: 1.1rem;
-    box-shadow: 0 8px 24px rgba(15, 39, 68, 0.04);
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    border: 1px solid var(--border-default, var(--color-border));
+    border-radius: var(--radius-md);
+    padding: 1.25rem;
+    box-shadow: var(--shadow-card);
+    transition: border-color 0.15s ease, background 0.15s ease;
 }
 
 .feature-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 12px 28px rgba(15, 39, 68, 0.08);
+    border-color: var(--neutral-300);
+    background: var(--color-background);
 }
 
 .feature-card__icon {
@@ -313,15 +313,23 @@
 }
 
 .stats-strip {
-    max-width: 1180px;
-    margin: 0 auto 2rem;
-    padding: 1rem 1.25rem;
+    width: 100%;
+    max-width: var(--layout-max-width);
+    margin: 0 auto var(--layout-gap);
+    padding: 1.25rem var(--layout-padding-x);
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 0.75rem;
-    background: linear-gradient(90deg, #0f2744, #134e6f);
-    border-radius: 14px;
-    color: #fff;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    color: var(--color-text);
+    box-shadow: var(--shadow-card);
+}
+
+.stats-strip--minimal {
+    grid-template-columns: 1fr;
+    max-width: var(--layout-max-width);
 }
 
 .stats-strip__item {
@@ -336,8 +344,10 @@
 }
 
 .stats-strip__item span {
-    font-size: 0.78rem;
-    opacity: 0.88;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--text-secondary, #475569);
+    opacity: 1;
 }
 
 .stats-placeholder {
@@ -347,15 +357,19 @@
 .about-section,
 .how-section,
 .contact-section {
-    max-width: 1180px;
-    margin: 0 auto;
-    padding: 1.5rem 1.25rem 2rem;
+    width: 100%;
+    max-width: var(--layout-max-width);
+    margin-inline: auto;
+    padding: var(--layout-gap) var(--layout-padding-x) var(--layout-section-y);
 }
 
 .about-section h2,
 .how-section h2,
 .contact-section h2 {
     margin: 0 0 0.75rem;
+    font-weight: 400;
+    font-size: clamp(1.5rem, 3vw, 2rem);
+    letter-spacing: -0.03em;
     color: var(--public-navy);
 }
 
@@ -388,8 +402,8 @@
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    background: #e6f6f4;
-    color: var(--public-teal-dark);
+    background: #eef4ff;
+    color: var(--color-primary);
     display: grid;
     place-items: center;
     font-weight: 700;
@@ -415,8 +429,10 @@
 }
 
 .public-footer__inner {
-    max-width: 1180px;
-    margin: 0 auto;
+    width: 100%;
+    max-width: var(--layout-max-width);
+    margin-inline: auto;
+    padding-inline: var(--layout-padding-x);
     text-align: center;
 }
 
@@ -436,7 +452,7 @@
 .public-footer nav button {
     border: none;
     background: none;
-    color: var(--public-teal);
+    color: var(--color-primary);
     cursor: pointer;
     font: inherit;
 }
@@ -458,7 +474,8 @@
     z-index: 100;
 }
 
-.login-modal {
+.login-modal,
+.ui-dialog.login-modal {
     position: relative;
     width: min(420px, 100%);
     max-height: calc(100vh - 2rem);
@@ -496,22 +513,30 @@
     height: 64px;
     margin: 0 auto 0.75rem;
     border-radius: 50%;
-    background: #e6f6f4;
-    color: var(--public-teal);
+    background: #eef4ff;
+    color: var(--color-primary);
     display: grid;
     place-items: center;
 }
 
-.login-modal h2 {
+.login-modal h2,
+.login-modal__title {
     margin: 0 0 0.35rem;
     font-size: 1.25rem;
+    font-weight: 500;
     color: var(--public-navy);
+    text-align: center;
 }
 
 .login-modal__sub {
     margin: 0 0 1rem;
     color: #64748b;
     font-size: 0.9rem;
+}
+
+.login-modal,
+.ui-dialog.login-modal {
+    text-align: center;
 }
 
 .login-modal__form {
@@ -530,17 +555,9 @@
     font-weight: 600;
 }
 
-.login-modal__form input {
+.login-modal__form .ui-input,
+.login-modal__form input:not(.password-field__input) {
     font-weight: 400;
-    border: 1px solid #e2e8f0;
-    border-radius: 10px;
-    padding: 0.6rem 0.75rem;
-}
-
-.login-modal__form input:focus-visible {
-    outline: 2px solid var(--public-teal);
-    outline-offset: 1px;
-    border-color: var(--public-teal);
 }
 
 .field-hint {
@@ -549,43 +566,20 @@
     color: #94a3b8;
 }
 
-.password-field {
-    position: relative;
-    display: block;
-}
-
-.password-field input {
-    width: 100%;
-    padding-right: 2.75rem;
-}
-
-.password-toggle {
-    position: absolute;
-    right: 0.35rem;
-    top: 50%;
-    transform: translateY(-50%);
-    border: none;
-    background: transparent;
-    color: #64748b;
-    cursor: pointer;
-    padding: 0.25rem;
-    border-radius: 6px;
-}
-
-.password-toggle:focus-visible {
-    outline: 2px solid var(--public-teal);
-}
+/* Password shell: ui-components.css */
 
 .login-modal__submit {
     margin-top: 0.25rem;
     width: 100%;
     border: none;
-    border-radius: 10px;
+    border-radius: var(--radius-md);
     padding: 0.7rem;
-    background: var(--public-teal);
+    min-height: 44px;
+    background: var(--color-primary);
     color: #fff;
     font-weight: 700;
     cursor: pointer;
+    box-shadow: none;
 }
 
 .login-modal__submit:disabled {
@@ -613,7 +607,7 @@
 .admin-auth-switch__link {
     border: none;
     background: none;
-    color: #0d9488;
+    color: var(--color-primary);
     font-weight: 700;
     font-size: 0.95rem;
     cursor: pointer;
@@ -673,19 +667,7 @@
     background: #f4f9fc;
 }
 
-@media (max-width: 960px) {
-    .hero {
-        grid-template-columns: 1fr;
-    }
-
-    .hero__visual::after {
-        background: linear-gradient(
-            180deg,
-            transparent 40%,
-            rgba(244, 249, 252, 0.85) 100%
-        );
-    }
-
+@media (max-width: 1023px) {
     .features__grid,
     .stats-strip,
     .how-steps {
@@ -693,7 +675,7 @@
     }
 }
 
-@media (max-width: 720px) {
+@media (max-width: 639px) {
     .public-nav-toggle {
         display: grid;
         place-items: center;

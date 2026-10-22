@@ -1,5 +1,6 @@
 import User from '../models/userModel.js';
 import ComplaintLog from '../models/complaintLogs.js';
+import { getDepartmentHodLookupCandidates } from '../constants/complaintDepartments.js';
 
 export const TERMINAL_STATUSES = ['resolved', 'rejected'];
 
@@ -9,12 +10,18 @@ export const normalizeStatus = (status) =>
 export const loadActor = async (userId) =>
     User.findById(userId).select('role department isActive name');
 
-export const findDepartmentHod = async (department) =>
-    User.findOne({
-        role: 'hod',
-        department,
-        isActive: true
-    });
+export const findDepartmentHod = async (department) => {
+    const candidates = getDepartmentHodLookupCandidates(department);
+    for (const dept of candidates) {
+        const hod = await User.findOne({
+            role: 'hod',
+            department: dept,
+            isActive: true
+        });
+        if (hod) return hod;
+    }
+    return null;
+};
 
 export const findInstitutionalDean = async () =>
     User.findOne({
@@ -28,6 +35,7 @@ export const findViceChancellor = async () =>
         isActive: true
     });
 
+/** @deprecated Use client-selected department; kept for legacy callers */
 export const resolveResponsibleDepartment = (categoryDoc, student) => {
     let department = categoryDoc.targetDepartment;
 

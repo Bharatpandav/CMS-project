@@ -2,6 +2,7 @@ import bcryptjs from 'bcryptjs';
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import userModel from '../models/userModel.js';
+import { assertSafeToSeed } from './lib/databaseSafety.js';
 
 dotenv.config();
 
@@ -46,6 +47,7 @@ const seedUsers = [
 
 const seedDatabase = async () => {
     try {
+        assertSafeToSeed(process.env.MONGO_URI);
         await mongoose.connect(process.env.MONGO_URI);
 
         console.log('MongoDB connected');

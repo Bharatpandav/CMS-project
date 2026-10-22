@@ -2,6 +2,7 @@ import express from 'express';
 
 import {
     getCategories,
+    getComplaintDepartments,
     createComplaint,
     getComplaints,
     getComplaintById,
@@ -23,6 +24,7 @@ const complaintRouter = express.Router();
 
 // 1. Complaint Categories
 complaintRouter.get('/categories', getCategories);
+complaintRouter.get('/departments', getComplaintDepartments);
 
 // 2. Student Group Invitations
 complaintRouter.get(

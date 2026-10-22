@@ -9,6 +9,8 @@ import {
     getStaffBasePath,
     getStaffRoleLabel
 } from '../utils/staffRoles.js';
+import { AppIcon } from '../components/AppIcon.jsx';
+import { PageHeader } from '../components/PageHeader.jsx';
 
 export function StaffDashboardPage() {
     const { user } = useAuth();
@@ -30,13 +32,10 @@ export function StaffDashboardPage() {
 
     return (
         <div className="dashboard page-stack">
-            <header className="page-header">
-                <h1>{roleLabel} Dashboard</h1>
-                <p>
-                    Complaints in your authorized scope ({total} total from
-                    server).
-                </p>
-            </header>
+            <PageHeader
+                title={`${roleLabel} dashboard`}
+                description={`Complaints in your authorized scope (${total} total from server).`}
+            />
 
             {error ? (
                 <div className="inline-alert">
@@ -50,25 +49,25 @@ export function StaffDashboardPage() {
                     accent="teal"
                     label="Accessible complaints"
                     value={loading ? '…' : String(total)}
-                    icon={<span>📋</span>}
+                    icon={<AppIcon name="clipboard-list" />}
                 />
                 <SummaryCard
                     accent="blue"
                     label="Pending review"
                     value={loading ? '…' : String(stats.pending)}
-                    icon={<span>⏳</span>}
+                    icon={<AppIcon name="hourglass" />}
                 />
                 <SummaryCard
                     accent="indigo"
                     label="In progress"
                     value={loading ? '…' : String(stats.inProgress)}
-                    icon={<span>🔄</span>}
+                    icon={<AppIcon name="refresh" />}
                 />
                 <SummaryCard
                     accent="navy"
                     label="Resolved"
                     value={loading ? '…' : String(stats.resolved)}
-                    icon={<span>✅</span>}
+                    icon={<AppIcon name="circle-check" />}
                 />
             </section>
 
@@ -78,7 +77,7 @@ export function StaffDashboardPage() {
                         accent="blue"
                         label="Escalated"
                         value={loading ? '…' : String(stats.escalated)}
-                        icon={<span>⬆️</span>}
+                        icon={<AppIcon name="arrow-up" />}
                     />
                 </section>
             ) : null}

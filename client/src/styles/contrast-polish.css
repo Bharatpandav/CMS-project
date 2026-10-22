@@ -1,0 +1,379 @@
+/**
+ * Readability, borders, and component visibility polish
+ */
+
+body {
+    background: var(--background);
+    color: var(--foreground);
+}
+
+/* Cards & panels */
+.panel,
+.ui-card,
+.summary-card,
+.feature-card,
+.cr-form-card,
+.profile-card,
+.form-card,
+.unified-feature-card {
+    background: var(--surface);
+    border: 1px solid var(--border-card);
+    box-shadow: var(--shadow-card);
+}
+
+.portal-sidebar,
+.mgmt-sidebar {
+    background: var(--surface);
+    border-color: var(--border-card);
+    box-shadow: var(--shadow-card);
+}
+
+.portal-header,
+.public-header,
+.mgmt-header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border-card);
+}
+
+/* Forms — native controls (pages not yet on ui-input) */
+input:not([type='checkbox']):not([type='radio']):not([type='file']):not(
+        [type='hidden']
+    ):not(.password-field__input):not(.ui-input-group__field),
+select:not(.ui-input-group__field),
+textarea:not(.ui-input-group__field) {
+    box-sizing: border-box;
+    min-height: var(--input-min-height);
+    padding: 0.625rem var(--input-padding-x);
+    font-size: 1rem;
+    line-height: 1.4;
+    color: var(--color-input-text);
+    background: var(--color-input-bg);
+    border: 1px solid var(--color-input-border);
+    border-radius: var(--input-radius);
+    transition:
+        border-color 0.15s ease,
+        box-shadow 0.15s ease,
+        background-color 0.15s ease;
+}
+
+input:not([type='checkbox']):not([type='radio']):not([type='file']):not(
+        [type='hidden']
+    ):not(.password-field__input):not(.ui-input-group__field):hover:not(
+        :disabled
+    ),
+select:not(.ui-input-group__field):hover:not(:disabled),
+textarea:not(.ui-input-group__field):hover:not(:disabled) {
+    border-color: var(--color-input-border-hover);
+}
+
+input::placeholder,
+textarea::placeholder {
+    color: var(--color-input-placeholder);
+    opacity: 1;
+}
+
+input:not(.password-field__input):focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+    outline: none;
+    border-color: var(--color-input-focus);
+    box-shadow: var(--focus-ring);
+}
+
+input:disabled:not(.password-field__input),
+select:disabled,
+textarea:disabled {
+    cursor: not-allowed;
+    color: var(--color-input-disabled-text);
+    background: var(--color-input-disabled-bg);
+    border-color: var(--color-input-border);
+    opacity: 1;
+}
+
+/* Search bars: border on wrapper, not inner field */
+.topnav__search input,
+.mgmt-header__search input {
+    min-height: auto;
+    padding: 0;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+}
+
+.topnav__search input:focus-visible,
+.mgmt-header__search input:focus-visible {
+    box-shadow: none;
+}
+
+.ui-btn--primary {
+    background: var(--brand-blue);
+    border: 1px solid var(--brand-blue);
+    color: #fff;
+    font-weight: 600;
+}
+
+.ui-btn--primary:hover:not(:disabled) {
+    background: var(--brand-blue-hover);
+    border-color: var(--brand-blue-hover);
+}
+
+.ui-btn--secondary {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--foreground);
+    font-weight: 600;
+}
+
+.ui-btn--secondary:hover:not(:disabled) {
+    background: var(--hover-surface);
+    border-color: var(--border-strong);
+}
+
+.ui-btn--outline {
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    color: var(--foreground);
+    font-weight: 600;
+}
+
+.ui-btn--destructive {
+    background: var(--danger);
+    border: 1px solid var(--danger);
+    color: #fff;
+    font-weight: 600;
+}
+
+button[type='submit'],
+.form-card > button,
+.profile-btn-primary,
+.cr-submit-btn {
+    background: var(--brand-blue) !important;
+    border: 1px solid var(--brand-blue) !important;
+    color: #fff !important;
+    font-weight: 600;
+}
+
+button[type='submit']:hover:not(:disabled),
+.profile-btn-primary:hover:not(:disabled),
+.cr-submit-btn:hover:not(:disabled) {
+    background: var(--brand-blue-hover) !important;
+    border-color: var(--brand-blue-hover) !important;
+}
+
+.btn-secondary {
+    background: var(--brand-navy);
+    border: 1px solid var(--brand-navy);
+    color: #fff;
+    font-weight: 600;
+}
+
+.btn-cancel {
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    color: var(--foreground);
+    font-weight: 600;
+}
+
+/* Links */
+.link-primary,
+.link-teal,
+.admin-back-home {
+    color: var(--brand-teal);
+    font-weight: 600;
+}
+
+.link-primary:hover,
+.link-teal:hover {
+    color: var(--brand-teal-hover);
+}
+
+/* Tables */
+.data-table th {
+    color: var(--text-secondary);
+    font-weight: 600;
+    border-bottom: 1px solid var(--border-strong);
+    background: var(--secondary);
+}
+
+.data-table td {
+    color: var(--foreground);
+    border-bottom: 1px solid var(--border-card);
+}
+
+.data-table tbody tr:hover {
+    background: var(--accent);
+}
+
+/* Status badges */
+.badge {
+    font-weight: 600;
+    border-width: 1px;
+    border-style: solid;
+}
+
+.badge--status-submitted,
+.badge--status-pending {
+    background: var(--info-bg);
+    color: #0c4a6e;
+    border-color: var(--info-border);
+}
+
+.badge--status-accepted,
+.badge--status-assigned {
+    background: #ede9fe;
+    color: #5b21b6;
+    border-color: #ddd6fe;
+}
+
+.badge--status-resolved {
+    background: var(--success-bg);
+    color: var(--success);
+    border-color: var(--success-border);
+}
+
+.badge--status-rejected {
+    background: var(--danger-bg);
+    color: var(--danger);
+    border-color: var(--danger-border);
+}
+
+.badge--status-escalated {
+    background: var(--warning-bg);
+    color: var(--warning);
+    border-color: var(--warning-border);
+}
+
+.badge--status-reopened {
+    background: #f3e8ff;
+    color: #7e22ce;
+    border-color: #e9d5ff;
+}
+
+.badge--priority-low {
+    background: var(--secondary);
+    color: var(--text-secondary);
+    border-color: var(--border);
+}
+
+.badge--priority-medium {
+    background: var(--info-bg);
+    color: var(--info);
+    border-color: var(--info-border);
+}
+
+.badge--priority-high {
+    background: var(--warning-bg);
+    color: var(--warning);
+    border-color: var(--warning-border);
+}
+
+.badge--priority-urgent {
+    background: var(--danger-bg);
+    color: var(--danger);
+    border-color: var(--danger-border);
+}
+
+/* Navigation */
+.portal-nav-link {
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.portal-nav-link:hover {
+    background: var(--hover-surface);
+    color: var(--foreground);
+}
+
+.portal-nav-link--active {
+    background: var(--accent);
+    color: var(--brand-navy);
+    font-weight: 600;
+    box-shadow: inset 3px 0 0 var(--brand-teal);
+}
+
+.mgmt-nav-link--active {
+    background: var(--accent);
+    color: var(--brand-navy);
+    box-shadow: inset 3px 0 0 var(--brand-teal);
+}
+
+/* Modals */
+.ui-dialog-backdrop {
+    z-index: var(--z-modal-backdrop, 200);
+    background: rgba(16, 42, 67, 0.55);
+}
+
+.ui-dialog {
+    z-index: var(--z-modal, 210);
+}
+
+.ui-dialog,
+.login-modal {
+    border: 1px solid var(--border-card);
+    box-shadow: 0 16px 48px rgba(16, 42, 67, 0.18);
+}
+
+/* Dropzones */
+.cr-dropzone {
+    border: 2px dashed var(--border-strong);
+    background: var(--surface);
+}
+
+.cr-dropzone:hover,
+.cr-dropzone.is-dragover {
+    border-color: var(--brand-teal);
+    background: var(--teal-soft);
+}
+
+/* Public homepage CTAs */
+.btn--primary,
+.public-header__login {
+    background: var(--brand-blue) !important;
+    border: 1px solid var(--brand-blue) !important;
+    color: #fff !important;
+    font-weight: 600;
+}
+
+.btn--primary:hover,
+.public-header__login:hover {
+    background: var(--brand-blue-hover) !important;
+}
+
+.btn--outline,
+.btn--admin,
+.public-header__admin {
+    background: var(--surface) !important;
+    border: 1px solid var(--border-strong) !important;
+    color: var(--foreground) !important;
+    font-weight: 600;
+}
+
+.inline-alert {
+    border: 1px solid var(--info-border);
+    background: var(--info-bg);
+    color: var(--foreground);
+}
+
+.form-error,
+.ui-field-error {
+    color: var(--danger);
+    font-weight: 500;
+}
+
+label,
+.ui-label {
+    color: var(--foreground);
+    font-weight: 500;
+}
+
+.app-page-header p,
+.page-header p,
+.hint,
+.field-hint,
+.ui-field-hint {
+    color: var(--text-secondary);
+}
+
+.panel__loading {
+    color: var(--text-secondary);
+}

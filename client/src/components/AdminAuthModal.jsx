@@ -1,13 +1,12 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { resolvePostLoginPath } from '../utils/navigationPaths.js';
 import { PasswordField } from './PasswordField.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { getPostLoginPath } from '../utils/roleRedirect.js';
 import { isAdminStaffRole } from '../utils/staffRoles.js';
-import {
-    canAccessManagementPortal,
-    getManagementDashboardPath
-} from '../utils/managementAccess.js';
+import { canAccessManagementPortal } from '../utils/managementAccess.js';
+import { getManagementPostLoginPath } from '../utils/managementAccess.js';
 
 function IconShield() {
     return (
@@ -21,6 +20,7 @@ function IconShield() {
 export function AdminAuthModal({ open, onClose, initialMode = 'admin' }) {
     const titleId = useId();
     const navigate = useNavigate();
+    const location = useLocation();
     const { login, logout } = useAuth();
     const emailRef = useRef(null);
 
@@ -101,12 +101,9 @@ export function AdminAuthModal({ open, onClose, initialMode = 'admin' }) {
                     return;
                 }
                 handleClose();
-                navigate(
-                    data.user?.isFirstLogin
-                        ? '/change-password'
-                        : getManagementDashboardPath(),
-                    { replace: true }
-                );
+                navigate(getManagementPostLoginPath(data.user), {
+                    replace: true
+                });
                 return;
             }
 
@@ -117,7 +114,12 @@ export function AdminAuthModal({ open, onClose, initialMode = 'admin' }) {
             }
 
             handleClose();
-            navigate(getPostLoginPath(data.user), { replace: true });
+            navigate(
+                resolvePostLoginPath(data.user, location.state?.from, {
+                    dashboardFallback: getPostLoginPath(data.user)
+                }),
+                { replace: true }
+            );
         } catch (err) {
             setError(err.message || 'Invalid credentials');
         } finally {
@@ -154,6 +156,7 @@ export function AdminAuthModal({ open, onClose, initialMode = 'admin' }) {
                         <input
                             id="admin-login-id"
                             ref={emailRef}
+                            className="ui-input"
                             type="email"
                             autoComplete="username"
                             placeholder="admin@university.edu"

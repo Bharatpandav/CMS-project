@@ -12,3 +12,12 @@ export function canAccessManagementPortal(role) {
 export function getManagementDashboardPath() {
     return '/management/dashboard';
 }
+
+export function getManagementPostLoginPath(user) {
+    if (!user) return '/';
+    if (user.isFirstLogin) return '/change-password';
+    if (canAccessManagementPortal(user.role)) {
+        return getManagementDashboardPath();
+    }
+    return '/app/dashboard';
+}

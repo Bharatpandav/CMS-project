@@ -1,15 +1,21 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
+import { PageHeader } from '../components/PageHeader.jsx';
+import { resolveComplaintsListPath } from '../utils/navigationPaths.js';
 import { complaintsApi, staffApi } from '../api/client.js';
 import { PriorityBadge, StatusBadge } from '../components/StatusBadge.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
-import { getStaffBasePath } from '../utils/staffRoles.js';
-
 export function StaffComplaintDetailPage() {
     const { id } = useParams();
     const { user } = useAuth();
-    const base = getStaffBasePath(user?.role);
-    const listPath = `${base}/complaints`;
+    const location = useLocation();
+    const listPath = resolveComplaintsListPath(
+        user?.role,
+        location.pathname
+    );
+    const dashboardTo = location.pathname.startsWith('/management')
+        ? '/management/dashboard'
+        : '/app/dashboard';
 
     const [data, setData] = useState(null);
     const [assignable, setAssignable] = useState([]);
@@ -77,7 +83,9 @@ export function StaffComplaintDetailPage() {
         return (
             <div className="page-error">
                 <p>{error}</p>
-                <Link to={listPath}>Back to complaints</Link>
+                <PageHeader
+                    back={{ fallbackTo: listPath, label: 'Complaints' }}
+                />
             </div>
         );
     }
@@ -103,16 +111,21 @@ export function StaffComplaintDetailPage() {
 
     return (
         <div className="page-stack">
-            <header className="page-header">
-                <Link to={listPath} className="link-teal">
-                    ← Complaints
-                </Link>
-                <h1>{c?.title}</h1>
-                <div className="detail-badges">
-                    <StatusBadge status={c?.status} />
-                    <PriorityBadge priority={c?.priority} />
-                </div>
-            </header>
+            <PageHeader
+                back={{ fallbackTo: listPath, label: 'Complaints' }}
+                breadcrumbs={[
+                    { to: dashboardTo, label: 'Dashboard' },
+                    { to: listPath, label: 'Complaints' },
+                    { label: 'Details' }
+                ]}
+                title={c?.title}
+                actions={
+                    <div className="detail-badges">
+                        <StatusBadge status={c?.status} />
+                        <PriorityBadge priority={c?.priority} />
+                    </div>
+                }
+            />
 
             {actionError ? (
                 <p className="form-error" role="alert">{actionError}</p>

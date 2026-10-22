@@ -1,0 +1,27 @@
+/**
+ * Shared layout width, alignment, and responsive gutters
+ */
+
+:root {
+    --layout-max-width: 1536px;
+    --layout-padding-x: clamp(1rem, 2.5vw, 2rem);
+    --layout-section-y: clamp(2rem, 4vw, 4rem);
+    --layout-gap: 1.5rem;
+}
+
+.layout-container {
+    width: 100%;
+    max-width: var(--layout-max-width);
+    margin-inline: auto;
+    padding-inline: var(--layout-padding-x);
+}
+
+.layout-container--wide {
+    max-width: 1536px;
+}
+
+/* Legacy page margin alias */
+:root {
+    --page-margin: var(--layout-padding-x);
+    --gutter-desktop: var(--layout-padding-x);
+}

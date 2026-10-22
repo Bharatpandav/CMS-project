@@ -1,8 +1,13 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
+import { PageHeader } from '../components/PageHeader.jsx';
 import { RecentComplaintsTable } from '../components/RecentComplaintsTable.jsx';
 import { useComplaintsData } from '../hooks/useComplaintsData.js';
+import { useListUiRestore } from '../hooks/useListUiRestore.js';
 
 export function StudentComplaintsPage({ title = 'My Complaints' }) {
+    const location = useLocation();
+    const listStateKey = location.pathname;
+    useListUiRestore(listStateKey);
     const { complaints, loading, error, reload } = useComplaintsData({
         limit: 50,
         myComplaints: 'true'
@@ -10,10 +15,14 @@ export function StudentComplaintsPage({ title = 'My Complaints' }) {
 
     return (
         <div className="page-stack">
-            <header className="page-header">
-                <h1>{title}</h1>
-                <p>Complaints you have raised or joined.</p>
-            </header>
+            <PageHeader
+                breadcrumbs={[
+                    { to: '/app/dashboard', label: 'Dashboard' },
+                    { label: title }
+                ]}
+                title={title}
+                description="Complaints you have raised or joined."
+            />
 
             {error ? (
                 <div className="inline-alert">
@@ -33,8 +42,13 @@ export function StudentComplaintsPage({ title = 'My Complaints' }) {
                 )}
             </article>
             <p className="hint">
-                To file a new complaint, use the official filing flow when
-                available from your portal.{' '}
+                <Link
+                    to="/student/complaints/register"
+                    className="link-teal"
+                >
+                    Register a new complaint
+                </Link>
+                {' · '}
                 <Link to="/student/support" className="link-teal">
                     Support
                 </Link>

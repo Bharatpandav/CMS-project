@@ -1,5 +1,6 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
+import { getRoleDashboardPath } from '../utils/navigationPaths.js';
 
 export function ProtectedRoute({
     children,
@@ -26,15 +27,7 @@ export function ProtectedRoute({
     }
 
     if (roles?.length && !roles.includes(user?.role)) {
-        return (
-            <div className="page-error">
-                <h1>Access denied</h1>
-                <p>
-                    Your role ({user?.role}) is not permitted to view this
-                    section.
-                </p>
-            </div>
-        );
+        return <Navigate to={getRoleDashboardPath(user)} replace />;
     }
 
     return children;

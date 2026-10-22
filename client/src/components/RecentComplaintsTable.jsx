@@ -1,12 +1,14 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import {
-    getStaffBasePath,
-    isAdminStaffRole
-} from '../utils/staffRoles.js';
+    buildListReturnState,
+    resolveComplaintsListPath,
+    saveListUiState
+} from '../utils/navigationPaths.js';
 import { IconMoreVertical } from './icons.jsx';
 import { PriorityBadge, StatusBadge } from './StatusBadge.jsx';
+import { EmptyState } from './ui/index.js';
 
 function formatDate(value) {
     if (!value) return '—';
@@ -26,29 +28,43 @@ function shortId(id) {
 export function RecentComplaintsTable({
     complaints = [],
     showViewAll = true,
-    viewAllPath = '/complaints'
+    viewAllPath = '/complaints',
+    complaintDetailBase: complaintDetailBaseProp,
+    listStateKey: listStateKeyProp,
+    onBeforeDetailNavigate
 }) {
     const { user } = useAuth();
+    const location = useLocation();
     const [openMenu, setOpenMenu] = useState(null);
-    const staffBase = isAdminStaffRole(user?.role)
-        ? getStaffBasePath(user.role)
-        : null;
     const complaintDetailBase =
-        user?.role === 'student'
-            ? '/student/complaints'
-            : staffBase
-            ? `${staffBase}/complaints`
-            : '/complaints';
+        complaintDetailBaseProp ||
+        resolveComplaintsListPath(user?.role, location.pathname);
+    const listStateKey = listStateKeyProp || location.pathname;
+    const listReturn = buildListReturnState(
+        location.pathname,
+        location.search
+    );
+
+    const persistListUi = () => {
+        const extra =
+            typeof onBeforeDetailNavigate === 'function'
+                ? onBeforeDetailNavigate()
+                : {};
+        saveListUiState(listStateKey, {
+            scrollY: window.scrollY,
+            ...extra
+        });
+    };
 
     if (!complaints.length) {
         return (
-            <div className="empty-state">
-                <p>No complaints in your authorized scope yet.</p>
-                <p className="empty-state__sub">
-                    New complaints will appear here when they are routed to
-                    your role.
-                </p>
-            </div>
+            <EmptyState
+                icon="clipboard-list"
+                title="No complaints in your authorized scope yet"
+            >
+                New complaints will appear here when they are routed to your
+                role.
+            </EmptyState>
         );
     }
 
@@ -71,7 +87,9 @@ export function RecentComplaintsTable({
                     {complaints.map((row) => (
                         <tr key={row._id}>
                             <td className="mono">{shortId(row._id)}</td>
-                            <td className="title-cell">{row.title}</td>
+                            <td className="title-cell" title={row.title}>
+                                {row.title}
+                            </td>
                             <td>{row.department || '—'}</td>
                             <td>
                                 <StatusBadge status={row.status} />
@@ -105,9 +123,11 @@ export function RecentComplaintsTable({
                                         <div className="row-menu__dropdown">
                                             <Link
                                                 to={`${complaintDetailBase}/${row._id}`}
-                                                onClick={() =>
-                                                    setOpenMenu(null)
-                                                }
+                                                state={listReturn}
+                                                onClick={() => {
+                                                    setOpenMenu(null);
+                                                    persistListUi();
+                                                }}
                                             >
                                                 View details
                                             </Link>

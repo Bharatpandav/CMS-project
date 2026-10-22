@@ -15,7 +15,7 @@ export function StudentSupportPage() {
             <article className="panel">
                 <p>
                     Account passwords can be updated from{' '}
-                    <Link to="/student/profile" className="link-teal">
+                    <Link to="/app/profile" className="link-teal">
                         My Profile
                     </Link>
                     .

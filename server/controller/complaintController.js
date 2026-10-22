@@ -15,9 +15,12 @@ import {
     isTerminalStatus,
     loadActor,
     recordComplaintLog,
-    resolveResponsibleDepartment,
     validateAssignTarget
 } from '../utils/complaintWorkflowHelper.js';
+import {
+    COMPLAINT_DEPARTMENTS,
+    isAllowedComplaintDepartment
+} from '../constants/complaintDepartments.js';
 
 // Helper: Check if user is authorized to access a private complaint
 const isUserAuthorizedForComplaint = (complaint, user) => {
@@ -68,6 +71,13 @@ const getCategories = async (req, res) => {
     }
 };
 
+const getComplaintDepartments = async (req, res) => {
+    res.json({
+        success: true,
+        departments: COMPLAINT_DEPARTMENTS
+    });
+};
+
 // ==================== 2. CREATE COMPLAINT ====================
 const createComplaint = async (req, res) => {
     try {
@@ -76,6 +86,7 @@ const createComplaint = async (req, res) => {
             description,
             category,
             categoryId,
+            department,
             location,
             incidentDate,
             preferredResolution,
@@ -180,10 +191,15 @@ const createComplaint = async (req, res) => {
         }
 
         const finalCategory = categoryDoc.name;
-        const finalDepartment = resolveResponsibleDepartment(
-            categoryDoc,
-            student
-        );
+        const finalDepartment = (department || '').trim();
+
+        if (!isAllowedComplaintDepartment(finalDepartment)) {
+            return res.status(400).json({
+                success: false,
+                message:
+                    'A valid related department is required. Choose one of the listed university departments.'
+            });
+        }
 
         const initialLevel = categoryDoc.initialLevel || 'hod';
 
@@ -1390,6 +1406,7 @@ const handleTimeouts = async () => {
 
 export {
     getCategories,
+    getComplaintDepartments,
     createComplaint,
     getComplaints,
     getComplaintById,

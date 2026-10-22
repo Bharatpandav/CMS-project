@@ -1,14 +1,25 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
 import { complaintsApi } from '../api/client.js';
+import { PageHeader } from '../components/PageHeader.jsx';
 import { PriorityBadge, StatusBadge } from '../components/StatusBadge.jsx';
+import { resolveComplaintsListPath } from '../utils/navigationPaths.js';
 
 export function ComplaintDetailPage() {
     const { id } = useParams();
     const { user } = useAuth();
-    const complaintsListPath =
-        user?.role === 'student' ? '/student/complaints' : '/complaints';
+    const location = useLocation();
+    const complaintsListPath = resolveComplaintsListPath(
+        user?.role,
+        location.pathname
+    );
+    const isStudent = user?.role === 'student';
+    const listLabel = isStudent ? 'My Complaints' : 'Complaints';
+    const dashboardTo = location.pathname.startsWith('/management')
+        ? '/management/dashboard'
+        : '/app/dashboard';
+
     const [data, setData] = useState(null);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(true);
@@ -42,7 +53,12 @@ export function ComplaintDetailPage() {
         return (
             <div className="page-error">
                 <p>{error}</p>
-                <Link to={complaintsListPath}>Back to complaints</Link>
+                <PageHeader
+                    back={{
+                        fallbackTo: complaintsListPath,
+                        label: listLabel
+                    }}
+                />
             </div>
         );
     }
@@ -52,16 +68,21 @@ export function ComplaintDetailPage() {
 
     return (
         <div className="page-stack">
-            <header className="page-header">
-                <Link to={complaintsListPath} className="link-teal">
-                    ← All complaints
-                </Link>
-                <h1>{c?.title}</h1>
-                <div className="detail-badges">
-                    <StatusBadge status={c?.status} />
-                    <PriorityBadge priority={c?.priority} />
-                </div>
-            </header>
+            <PageHeader
+                back={{ fallbackTo: complaintsListPath, label: listLabel }}
+                breadcrumbs={[
+                    { to: dashboardTo, label: 'Dashboard' },
+                    { to: complaintsListPath, label: listLabel },
+                    { label: 'Details' }
+                ]}
+                title={c?.title}
+                actions={
+                    <div className="detail-badges">
+                        <StatusBadge status={c?.status} />
+                        <PriorityBadge priority={c?.priority} />
+                    </div>
+                }
+            />
 
             <article className="panel">
                 <p>{c?.description}</p>

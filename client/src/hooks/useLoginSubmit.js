@@ -1,11 +1,12 @@
 import { useCallback, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
-import { getPostLoginPath } from '../utils/roleRedirect.js';
+import { resolvePostLoginPath } from '../utils/navigationPaths.js';
 
 export function useLoginSubmit({ onSuccess } = {}) {
     const { login } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
@@ -28,7 +29,11 @@ export function useLoginSubmit({ onSuccess } = {}) {
             try {
                 const data = await login(urn, pwd);
                 onSuccess?.();
-                navigate(getPostLoginPath(data.user), { replace: true });
+                const dest = resolvePostLoginPath(
+                    data.user,
+                    location.state?.from
+                );
+                navigate(dest, { replace: true });
                 return true;
             } catch (err) {
                 setError(
@@ -40,7 +45,7 @@ export function useLoginSubmit({ onSuccess } = {}) {
                 setLoading(false);
             }
         },
-        [login, navigate, onSuccess]
+        [login, navigate, onSuccess, location]
     );
 
     return { submitLogin, loading, error, setError };

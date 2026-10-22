@@ -1,0 +1,495 @@
+/**
+ * Reusable UI primitives — Vercel Minimal (maps to design-system tokens)
+ */
+
+.ui-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    min-height: 40px;
+    padding: 0 1.125rem;
+    border-radius: var(--radius-pill);
+    font-family: var(--font-body);
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1.25;
+    border: 1px solid transparent;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.ui-btn:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+}
+
+.ui-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.ui-btn--primary {
+    background: var(--color-primary);
+    color: var(--color-primary-contrast);
+}
+
+.ui-btn--primary:hover:not(:disabled) {
+    background: var(--color-primary-hover);
+}
+
+.ui-btn--secondary {
+    background: var(--color-surface);
+    color: var(--color-text);
+    border-color: var(--color-border);
+}
+
+.ui-btn--secondary:hover:not(:disabled) {
+    background: var(--color-tertiary);
+}
+
+.ui-btn--ghost {
+    background: transparent;
+    color: var(--color-text);
+    border-color: transparent;
+}
+
+.ui-btn--ghost:hover:not(:disabled) {
+    background: var(--color-tertiary);
+}
+
+.ui-btn--block {
+    width: 100%;
+}
+
+.ui-label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-text);
+}
+
+.ui-input,
+.ui-select,
+.ui-textarea {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    font: inherit;
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 1.4;
+    color: var(--color-input-text);
+    background: var(--color-input-bg);
+    border: 1px solid var(--color-input-border);
+    border-radius: var(--input-radius);
+    padding: 0.625rem var(--input-padding-x);
+    min-height: var(--input-min-height);
+    transition:
+        border-color 0.15s ease,
+        box-shadow 0.15s ease,
+        background-color 0.15s ease;
+}
+
+.ui-input:hover:not(:disabled),
+.ui-select:hover:not(:disabled),
+.ui-textarea:hover:not(:disabled) {
+    border-color: var(--color-input-border-hover);
+}
+
+.ui-textarea {
+    min-height: 120px;
+    padding-top: 0.65rem;
+    resize: vertical;
+}
+
+.ui-input::placeholder,
+.ui-textarea::placeholder {
+    color: var(--color-input-placeholder);
+    opacity: 1;
+}
+
+.ui-input:focus-visible,
+.ui-select:focus-visible,
+.ui-textarea:focus-visible {
+    outline: none;
+    border-color: var(--color-input-focus);
+    box-shadow: var(--focus-ring);
+}
+
+.ui-input:disabled,
+.ui-select:disabled,
+.ui-textarea:disabled {
+    cursor: not-allowed;
+    color: var(--color-input-disabled-text);
+    background: var(--color-input-disabled-bg);
+    border-color: var(--color-input-border);
+    opacity: 1;
+}
+
+.ui-input--error,
+.ui-textarea--error,
+.ui-select--error {
+    border-color: var(--color-input-error);
+}
+
+.ui-input--error:focus-visible,
+.ui-textarea--error:focus-visible {
+    border-color: var(--color-input-error);
+    box-shadow: 0 0 0 2px var(--color-input-bg), 0 0 0 4px rgba(220, 38, 38, 0.35);
+}
+
+/* Password: bordered shell + borderless inner input */
+.ui-input-shell,
+.password-field {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-height: var(--input-min-height);
+    box-sizing: border-box;
+    background: var(--color-input-bg);
+    border: 1px solid var(--color-input-border);
+    border-radius: var(--input-radius);
+    transition:
+        border-color 0.15s ease,
+        box-shadow 0.15s ease,
+        background-color 0.15s ease;
+}
+
+.ui-input-shell:hover:not(:has(input:disabled)),
+.password-field:hover:not(:has(input:disabled)) {
+    border-color: var(--color-input-border-hover);
+}
+
+.ui-input-shell:focus-within,
+.password-field:focus-within {
+    border-color: var(--color-input-focus);
+    box-shadow: var(--focus-ring);
+}
+
+.ui-input-shell--error,
+.password-field.ui-input-shell--error {
+    border-color: var(--color-input-error);
+}
+
+.ui-input-shell--error:focus-within,
+.password-field.ui-input-shell--error:focus-within {
+    border-color: var(--color-input-error);
+    box-shadow: 0 0 0 2px var(--color-input-bg), 0 0 0 4px rgba(220, 38, 38, 0.35);
+}
+
+.ui-input-shell:has(input:disabled),
+.password-field:has(input:disabled) {
+    background: var(--color-input-disabled-bg);
+    border-color: var(--color-input-border);
+}
+
+.password-field__input {
+    flex: 1;
+    min-width: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0.625rem var(--input-padding-x);
+    padding-right: 2.75rem;
+    min-height: calc(var(--input-min-height) - 2px);
+    border: none;
+    background: transparent;
+    font: inherit;
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 1.4;
+    color: var(--color-input-text);
+    border-radius: calc(var(--input-radius) - 1px);
+}
+
+.password-field__input::placeholder {
+    color: var(--color-input-placeholder);
+    opacity: 1;
+}
+
+.password-field__input:focus {
+    outline: none;
+}
+
+.password-field__input:disabled {
+    cursor: not-allowed;
+    color: var(--color-input-disabled-text);
+}
+
+.password-field__toggle {
+    position: absolute;
+    right: 0.35rem;
+    top: 50%;
+    transform: translateY(-50%);
+    display: grid;
+    place-items: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--color-input-placeholder);
+    cursor: pointer;
+}
+
+.password-field__toggle:hover:not(:disabled) {
+    color: var(--color-input-text);
+    background: var(--hover-surface, #f1f5f9);
+}
+
+.password-field__toggle:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+}
+
+.password-field__toggle:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+/* Icon + field wrapper (register complaint, search, etc.) */
+.ui-input-group {
+    position: relative;
+    display: flex;
+    align-items: stretch;
+    width: 100%;
+}
+
+.ui-input-group__icon {
+    position: absolute;
+    left: 0.875rem;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.25rem;
+    height: 1.25rem;
+    color: var(--color-input-placeholder);
+    pointer-events: none;
+    z-index: 1;
+}
+
+.ui-input-group__icon--textarea {
+    top: 0.875rem;
+    transform: none;
+}
+
+.ui-input-group__field,
+.ui-input-group .ui-input,
+.ui-input-group input:not([type='checkbox']):not([type='radio']):not([type='file']),
+.ui-input-group select,
+.ui-input-group textarea {
+    position: relative;
+    z-index: 0;
+    width: 100%;
+    box-sizing: border-box;
+    min-height: var(--input-min-height);
+    padding: 0.625rem 0.875rem 0.625rem 2.75rem;
+    font: inherit;
+    font-size: 1rem;
+    line-height: 1.4;
+    color: var(--color-input-text);
+    background-color: var(--color-input-bg);
+    border: 1px solid var(--color-input-border);
+    border-radius: var(--input-radius);
+}
+
+.ui-input-group textarea,
+.ui-input-group .ui-textarea {
+    min-height: 140px;
+    padding-top: 0.75rem;
+    resize: vertical;
+}
+
+.ui-input-group select,
+.ui-input-group .ui-select {
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: 2.5rem;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    background-size: 1rem;
+}
+
+.ui-input-group--no-icon .ui-input-group__field,
+.ui-input-group--no-icon input,
+.ui-input-group--no-icon select,
+.ui-input-group--no-icon textarea {
+    padding-left: 0.875rem;
+}
+
+.ui-input-group__field:focus-visible,
+.ui-input-group input:focus-visible,
+.ui-input-group select:focus-visible,
+.ui-input-group textarea:focus-visible {
+    outline: none;
+    border-color: var(--color-input-focus);
+    box-shadow: var(--focus-ring);
+}
+
+.ui-input-group__field:disabled,
+.ui-input-group input:disabled,
+.ui-input-group select:disabled,
+.ui-input-group textarea:disabled {
+    cursor: not-allowed;
+    color: var(--color-input-disabled-text);
+    background-color: var(--color-input-disabled-bg);
+}
+
+.ui-field-hint {
+    font-size: 0.75rem;
+    font-weight: 400;
+    color: var(--color-text-muted);
+}
+
+.ui-field-error {
+    font-size: 0.8125rem;
+    color: var(--color-error);
+    margin: 0;
+}
+
+.ui-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 1rem 1.125rem;
+    box-shadow: none;
+}
+
+.ui-card__header {
+    margin-bottom: 0.75rem;
+}
+
+.ui-card__title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+}
+
+.ui-card__description {
+    margin: 0.25rem 0 0;
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+}
+
+.ui-dialog-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: grid;
+    place-items: center;
+    padding: var(--page-margin);
+    background: rgba(23, 23, 23, 0.4);
+}
+
+.ui-dialog {
+    position: relative;
+    width: min(420px, 100%);
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem 1.35rem 1.25rem;
+    box-shadow: var(--shadow-subtle);
+}
+
+.ui-dialog__close {
+    position: absolute;
+    top: 0.65rem;
+    right: 0.65rem;
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: var(--radius-pill);
+    background: transparent;
+    color: var(--color-text-muted);
+    cursor: pointer;
+}
+
+.ui-dialog__close:hover,
+.ui-dialog__close:focus-visible {
+    background: var(--color-tertiary);
+    outline: none;
+    box-shadow: var(--focus-ring);
+}
+
+.ui-empty {
+    text-align: center;
+    padding: 2rem 1rem;
+    border: 1px dashed var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-background);
+}
+
+.ui-empty__icon {
+    display: inline-flex;
+    margin-bottom: 0.65rem;
+    color: var(--color-text-muted);
+}
+
+.ui-empty__title {
+    margin: 0 0 0.35rem;
+    font-size: 0.9375rem;
+    font-weight: 500;
+}
+
+.ui-empty__text {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+    max-width: 36ch;
+    margin-inline: auto;
+}
+
+.ui-skeleton {
+    background: var(--color-tertiary);
+    border-radius: var(--radius-sm);
+    animation: ui-skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.ui-skeleton--text {
+    height: 0.875rem;
+    margin-bottom: 0.5rem;
+}
+
+.ui-skeleton--title {
+    height: 1.25rem;
+    width: 60%;
+    margin-bottom: 0.75rem;
+}
+
+@keyframes ui-skeleton-pulse {
+    0%,
+    100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.55;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ui-skeleton {
+        animation: none;
+        background: var(--color-tertiary);
+    }
+}
+
+/* Subtle monochrome pattern (homepage / empty states only) */
+.surface-pattern-subtle {
+    background-color: var(--color-background);
+    background-image: url("data:image/svg+xml,%3Csvg width='24' height='24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 23h24v1H0zM23 0v24h1V0z' fill='%23EBEBEB'/%3E%3C/svg%3E");
+    background-size: 24px 24px;
+}

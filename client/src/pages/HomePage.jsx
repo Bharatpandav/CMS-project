@@ -5,57 +5,57 @@ import { AdminAuthModal } from '../components/AdminAuthModal.jsx';
 import { LoginModal } from '../components/LoginModal.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { getPostLoginPath } from '../utils/roleRedirect.js';
-import {
-    canAccessManagementPortal,
-    getManagementDashboardPath
-} from '../utils/managementAccess.js';
+import { canAccessManagementPortal } from '../utils/managementAccess.js';
+import { getManagementDashboardPath } from '../utils/managementAccess.js';
 import { isAdminStaffRole } from '../utils/staffRoles.js';
+import { AppIcon } from '../components/AppIcon.jsx';
+import { IconMenu } from '../components/icons.jsx';
 import '../styles/home.css';
+import '../styles/cms-surfaces.css';
 
 const FEATURES = [
     {
-        title: 'Raise Complaint',
-        description: 'Report issues easily in a few steps.',
-        icon: '📝'
+        title: 'Complaint registration',
+        description: 'Submit issues with the details your team needs to act.',
+        iconKey: 'file-plus'
     },
     {
-        title: 'Track Status',
-        description: 'Stay updated on complaint progress.',
-        icon: '📊'
+        title: 'Complaint tracking',
+        description: 'Follow status updates from submission through resolution.',
+        iconKey: 'activity'
     },
     {
-        title: 'Transparent Process',
-        description: 'Promote accountability and timely resolution.',
-        icon: '🔍'
+        title: 'Transparent review',
+        description: 'Clear routing to departments and accountable workflows.',
+        iconKey: 'clipboard-list'
     },
     {
-        title: 'Better Campus',
-        description:
-            'Work together for a safer, more responsive university.',
-        icon: '🏛️'
+        title: 'Secure access',
+        description: 'University-authenticated access with role-based permissions.',
+        iconKey: 'lock'
     }
 ];
 
 const STEPS = [
     {
         step: '1',
-        title: 'Login',
-        text: 'Access the portal using university credentials.'
+        title: 'Sign in',
+        text: 'Use your university credentials to access the portal.'
     },
     {
         step: '2',
-        title: 'Raise Complaint',
-        text: 'Fill in the details and submit an issue.'
+        title: 'Register a complaint',
+        text: 'Describe the issue and submit it to the responsible department.'
     },
     {
         step: '3',
-        title: 'Track Progress',
-        text: 'Follow updates on the complaint.'
+        title: 'Track progress',
+        text: 'Monitor status updates as your complaint moves through review.'
     },
     {
         step: '4',
-        title: 'Get Resolution',
-        text: 'Receive the outcome from the responsible team.'
+        title: 'Receive an update',
+        text: 'Get the outcome or next steps from the assigned team.'
     }
 ];
 
@@ -193,7 +193,7 @@ export function HomePage() {
                         aria-label="Toggle menu"
                         onClick={() => setMobileNav((v) => !v)}
                     >
-                        ☰
+                        <IconMenu />
                     </button>
 
                     <nav
@@ -261,16 +261,15 @@ export function HomePage() {
             </header>
 
             <main>
-                <section id="home" className="hero">
+                <section id="home" className="hero surface-pattern-subtle">
                     <div className="hero__content">
-                        <h1>
-                            Raise. Track. Resolve.
-                            <span> Together for a Better Campus.</span>
+                        <p className="section-label">University CMS</p>
+                        <h1 className="type-display">
+                            A better campus starts with being heard.
                         </h1>
-                        <p className="hero__lead">
-                            A simple and transparent platform for students and
-                            staff to report issues, track their status, and help
-                            build a better university.
+                        <p className="hero__lead type-body-lg">
+                            Report issues, track progress, and access university
+                            support through one simple, transparent platform.
                         </p>
                         <div className="hero__actions">
                             <button
@@ -278,7 +277,7 @@ export function HomePage() {
                                 className="btn btn--primary"
                                 onClick={handleLoginClick}
                             >
-                                Login to Raise a Complaint
+                                {isAuthenticated ? 'Open portal' : 'Login'}
                             </button>
                             <button
                                 type="button"
@@ -296,14 +295,6 @@ export function HomePage() {
                             </button>
                         </div>
                     </div>
-                    <div className="hero__visual" aria-hidden="true">
-                        <img
-                            src="https://images.unsplash.com/photo-1562774053-701939374585?w=900&q=75&auto=format&fit=crop"
-                            alt=""
-                            loading="lazy"
-                            decoding="async"
-                        />
-                    </div>
                 </section>
 
                 <section className="features" aria-labelledby="features-title">
@@ -313,8 +304,8 @@ export function HomePage() {
                     <div className="features__grid">
                         {FEATURES.map((f) => (
                             <article key={f.title} className="feature-card">
-                                <span className="feature-card__icon" aria-hidden="true">
-                                    {f.icon}
+                                <span className="feature-card__icon">
+                                    <AppIcon name={f.iconKey} size="lg" />
                                 </span>
                                 <h3>{f.title}</h3>
                                 <p>{f.description}</p>
@@ -323,33 +314,26 @@ export function HomePage() {
                     </div>
                 </section>
 
-                <section className="stats-strip" aria-label="Platform overview">
-                    <div className="stats-strip__item">
-                        <strong>Students &amp; Staff</strong>
-                        <span>University community</span>
-                    </div>
-                    <div className="stats-strip__item">
-                        <strong>Complaints Resolved</strong>
-                        <span className="stats-placeholder">
-                            Live count requires analytics API
-                        </span>
-                    </div>
-                    <div className="stats-strip__item">
-                        <strong>
-                            {deptCount !== null ? deptCount : '—'}
-                        </strong>
-                        <span>Service departments (from categories)</span>
-                    </div>
-                    <div className="stats-strip__item">
-                        <strong>One Platform</strong>
-                        <span>Transparent complaint handling</span>
-                    </div>
-                </section>
+                {deptCount !== null ? (
+                    <section
+                        className="stats-strip stats-strip--minimal"
+                        aria-label="Platform overview"
+                    >
+                        <div className="stats-strip__item">
+                            <strong>{deptCount}</strong>
+                            <span>
+                                Service departments mapped from active
+                                categories
+                            </span>
+                        </div>
+                    </section>
+                ) : null}
 
                 <section
                     id="about"
                     className="about-section"
                 >
+                    <p className="section-label">About the platform</p>
                     <h2>About</h2>
                     <p>
                         The University Complaint Management System connects
@@ -364,6 +348,7 @@ export function HomePage() {
                     className="how-section"
                     aria-labelledby="how-title"
                 >
+                    <p className="section-label">Process</p>
                     <h2 id="how-title">How It Works</h2>
                     <ol className="how-steps">
                         {STEPS.map((s) => (
@@ -379,6 +364,7 @@ export function HomePage() {
                 </section>
 
                 <section id="contact" className="contact-section">
+                    <p className="section-label">Support</p>
                     <h2>Contact</h2>
                     <p>
                         For account access, use your university-provided URN
