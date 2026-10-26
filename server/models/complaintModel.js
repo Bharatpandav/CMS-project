@@ -27,6 +27,7 @@ const studentProfileSnapshotSchema = new mongoose.Schema(
     {
         name: { type: String, required: true },
         email: { type: String, required: true },
+        phone: { type: String, default: '' },
         rollNumber: { type: String, default: '' },
         department: { type: String, default: '' },
         semester: { type: Number, default: null },
@@ -61,6 +62,11 @@ const complaintSchema = new mongoose.Schema(
         },
         department: { type: String, required: true, index: true },
 
+        publicId: {
+            type: String,
+            trim: true,
+            match: /^CID\/\d{1,10}\/\d{2,}$/
+        },
         title: { type: String, required: true, trim: true },
         description: { type: String, required: true, trim: true },
         location: { type: String, trim: true, default: '' },
@@ -135,7 +141,8 @@ const complaintSchema = new mongoose.Schema(
                 'rejected',
                 'resolved',
                 'escalated',
-                'reopened'
+                'reopened',
+                'withdrawn'
             ],
             default: 'submitted',
             index: true
@@ -162,6 +169,13 @@ complaintSchema.index({ currentAssignee: 1, status: 1 });
 complaintSchema.index({ visibility: 1, status: 1 });
 complaintSchema.index({ department: 1, visibility: 1 });
 complaintSchema.index({ 'participants.student': 1 });
+complaintSchema.index(
+    { publicId: 1 },
+    {
+        unique: true,
+        partialFilterExpression: { publicId: { $type: 'string' } }
+    }
+);
 
 const Complaint =
     mongoose.models.Complaint || mongoose.model('Complaint', complaintSchema);

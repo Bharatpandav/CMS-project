@@ -4,13 +4,18 @@ import { RecentComplaintsTable } from '../components/RecentComplaintsTable.jsx';
 import { useComplaintsData } from '../hooks/useComplaintsData.js';
 import { useListUiRestore } from '../hooks/useListUiRestore.js';
 
-export function StudentComplaintsPage({ title = 'My Complaints' }) {
+export function StudentComplaintsPage({
+    title = 'My Complaints',
+    scope = 'mine'
+}) {
     const location = useLocation();
     const listStateKey = location.pathname;
+    const isPublic = scope === 'public';
     useListUiRestore(listStateKey);
     const { complaints, loading, error, reload } = useComplaintsData({
         limit: 50,
-        myComplaints: 'true'
+        myComplaints: isPublic ? undefined : 'true',
+        publicFeed: isPublic
     });
 
     return (
@@ -21,7 +26,11 @@ export function StudentComplaintsPage({ title = 'My Complaints' }) {
                     { label: title }
                 ]}
                 title={title}
-                description="Complaints you have raised or joined."
+                description={
+                    isPublic
+                        ? 'Latest public complaints across the university. Private complaints are not included.'
+                        : 'Complaints you have raised or joined.'
+                }
             />
 
             {error ? (
@@ -38,6 +47,8 @@ export function StudentComplaintsPage({ title = 'My Complaints' }) {
                     <RecentComplaintsTable
                         complaints={complaints}
                         showViewAll={false}
+                        complaintDetailBase="/student/complaints"
+                        listStateKey={listStateKey}
                     />
                 )}
             </article>

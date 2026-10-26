@@ -1,5 +1,8 @@
 import { Link } from 'react-router-dom';
-import { PriorityBadge, StatusBadge } from '../StatusBadge.jsx';
+import { StatusBadge } from '../StatusBadge.jsx';
+import { complaintSubject } from '../../utils/complaintTitle.js';
+import { complaintPublicId } from '../../utils/complaintPublicId.js';
+import { complaintAccessLabel } from '../../utils/complaintAccess.js';
 
 function formatDateTime(value) {
     if (!value) return '—';
@@ -9,12 +12,6 @@ function formatDateTime(value) {
         hour: '2-digit',
         minute: '2-digit'
     });
-}
-
-function shortId(id) {
-    if (!id) return '—';
-    const str = String(id);
-    return `#${str.slice(-6).toUpperCase()}`;
 }
 
 function assigneeLabel(row) {
@@ -49,22 +46,24 @@ export function ManagementRecentComplaints({
                         <th>Status</th>
                         <th>Assigned To</th>
                         <th>Date</th>
-                        <th>Priority</th>
                         <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
                     {complaints.map((row) => (
                         <tr key={row._id}>
-                            <td className="mono">{shortId(row._id)}</td>
+                            <td className="mono">{complaintPublicId(row) || '—'}</td>
                             <td className="title-cell">
                                 <Link
                                     to={`${detailBase}/${row._id}`}
                                     className="title-link"
-                                    title={row.title}
+                                    title={complaintSubject(row.title)}
                                 >
-                                    {row.title}
+                                    {complaintSubject(row.title)}
                                 </Link>
+                                <span className="title-cell__access">
+                                    {complaintAccessLabel(row)}
+                                </span>
                             </td>
                             <td>{row.department || '—'}</td>
                             <td>
@@ -72,9 +71,6 @@ export function ManagementRecentComplaints({
                             </td>
                             <td>{assigneeLabel(row)}</td>
                             <td>{formatDateTime(row.createdAt || row.Date)}</td>
-                            <td>
-                                <PriorityBadge priority={row.priority} />
-                            </td>
                             <td>
                                 <Link
                                     to={`${detailBase}/${row._id}`}

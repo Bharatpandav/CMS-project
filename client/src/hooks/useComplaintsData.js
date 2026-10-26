@@ -4,6 +4,7 @@ import { complaintsApi } from '../api/client.js';
 export function useComplaintsData({
     limit = 50,
     myComplaints,
+    publicFeed,
     status
 } = {}) {
     const [complaints, setComplaints] = useState([]);
@@ -19,7 +20,9 @@ export function useComplaintsData({
                 page: 1,
                 limit: String(limit)
             };
-            if (myComplaints) {
+            if (publicFeed) {
+                params.publicFeed = 'true';
+            } else if (myComplaints) {
                 params.myComplaints = 'true';
             }
             if (status) {
@@ -33,7 +36,7 @@ export function useComplaintsData({
         } finally {
             setLoading(false);
         }
-    }, [limit, myComplaints, status]);
+    }, [limit, myComplaints, publicFeed, status]);
 
     useEffect(() => {
         load();

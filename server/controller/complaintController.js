@@ -21,18 +21,40 @@ import {
     COMPLAINT_DEPARTMENTS,
     isAllowedComplaintDepartment
 } from '../constants/complaintDepartments.js';
+import {
+    canResolveComplaintContact,
+    serializeComplaintForUser
+} from '../utils/complaintPrivacy.js';
+import { createNotification, notifyComplaintWatchers, notifyUsers } from '../utils/notificationHelper.js';
+import { allocateComplaintPublicId } from '../utils/complaintPublicId.js';
+import {
+    canJoinStoredComplaint,
+    resolveComplaintAccess
+} from '../utils/complaintAccess.js';
+import {
+    titleMentionsAssignee,
+    titleMentionsGroupInvite,
+    titleMentionsStatus,
+    titleWithoutStatus
+} from '../utils/complaintTitle.js';
 
 // Helper: Check if user is authorized to access a private complaint
+const recordId = (value) => {
+    if (!value) return '';
+    if (typeof value === 'object') return String(value._id || value.id || '');
+    return String(value);
+};
+
 const isUserAuthorizedForComplaint = (complaint, user) => {
     if (complaint.visibility === 'public') return true;
 
-    const userIdStr = user.id || user._id?.toString();
-    const isCreator = complaint.raisedBy?.toString() === userIdStr;
+    const userIdStr = String(user.id || user._id || '');
+    const isCreator = recordId(complaint.raisedBy) === userIdStr;
     const isParticipant = complaint.participants?.some(
-        (p) => p.student?.toString() === userIdStr
+        (p) => recordId(p.student) === userIdStr
     );
-    const isAssignee = complaint.currentAssignee?.toString() === userIdStr;
-    const isAssigner = complaint.assignedBy?.toString() === userIdStr;
+    const isAssignee = recordId(complaint.currentAssignee) === userIdStr;
+    const isAssigner = recordId(complaint.assignedBy) === userIdStr;
     const isDeptHOD =
         user.role === 'hod' && user.department === complaint.department;
     const isAssignedAdvisor =
@@ -90,15 +112,11 @@ const createComplaint = async (req, res) => {
             location,
             incidentDate,
             preferredResolution,
-            priority,
-            complaintType = 'solo',
             visibility = 'public',
             images,
             photos,
             attachments,
-            undertaking,
-            inviteRollNumbers,
-            inviteUrns
+            undertaking
         } = req.body;
 
         if (!undertaking) {
@@ -131,11 +149,51 @@ const createComplaint = async (req, res) => {
             });
         }
 
+        const complainantRoll = String(student.rollNumber || '').trim();
+        if (!/^\d{1,10}$/.test(complainantRoll)) {
+            return res.status(400).json({
+                success: false,
+                message:
+                    'Your registered roll number is required before a complaint ID can be issued'
+            });
+        }
+
         // Required text fields
-        if (!title || !title.trim()) {
+        const shortTitle = String(title || '')
+            .replace(/[\r\n\t]+/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+        const titleWordCount = shortTitle ? shortTitle.split(' ').length : 0;
+        if (!shortTitle) {
             return res.status(400).json({
                 success: false,
                 message: 'Complaint title is required'
+            });
+        }
+        if (shortTitle.length > 60 || titleWordCount > 8) {
+            return res.status(400).json({
+                success: false,
+                message:
+                    'Use a short title of up to 8 words on one line'
+            });
+        }
+        if (titleMentionsGroupInvite(shortTitle)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Do not mention a group invite in the title'
+            });
+        }
+        if (titleMentionsAssignee(shortTitle)) {
+            return res.status(400).json({
+                success: false,
+                message:
+                    'Do not mention who the complaint is assigned to in the title'
+            });
+        }
+        if (titleMentionsStatus(shortTitle)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Do not mention the complaint status in the title'
             });
         }
 
@@ -146,26 +204,18 @@ const createComplaint = async (req, res) => {
             });
         }
 
-        // Validate complaint type and visibility
-        const finalComplaintType =
-            complaintType === 'group' ? 'group' : 'solo';
-        const finalVisibility =
-            visibility === 'private' ? 'private' : 'public';
-
-        // RULE: Private complaints must be solo; reject private-group
-        if (finalVisibility === 'private' && finalComplaintType === 'group') {
+        const access = resolveComplaintAccess({
+            complaintType: 'solo',
+            visibility
+        });
+        if (!access.ok) {
             return res.status(400).json({
                 success: false,
-                message:
-                    'Private complaints cannot be group complaints. Group complaints must be public.'
+                message: access.message
             });
         }
-
-        // Validate Priority
-        const validPriorities = ['low', 'medium', 'high', 'urgent'];
-        const finalPriority = validPriorities.includes(priority)
-            ? priority
-            : 'medium';
+        const finalComplaintType = access.complaintType;
+        const finalVisibility = access.visibility;
 
         // Validate and resolve Category and Department routing
         await ensureDefaultCategories();
@@ -245,6 +295,7 @@ const createComplaint = async (req, res) => {
         const studentProfile = {
             name: student.name,
             email: student.email,
+            phone: student.phone || '',
             rollNumber: student.rollNumber || '',
             department: student.department || '',
             semester: student.semester || null,
@@ -263,6 +314,17 @@ const createComplaint = async (req, res) => {
         const complaintAttachments = Array.isArray(attachments)
             ? attachments
             : [];
+        const imagePayloadBytes = complaintImages.reduce(
+            (sum, item) => sum + String(item || '').length,
+            0
+        );
+        if (imagePayloadBytes > 8 * 1024 * 1024) {
+            return res.status(413).json({
+                success: false,
+                message:
+                    'The complaint is too large. Remove an image or use a smaller photo, then submit again.'
+            });
+        }
 
         // Participants setup: creator is the first confirmed participant
         const participants = [
@@ -274,21 +336,24 @@ const createComplaint = async (req, res) => {
             }
         ];
 
+        const publicId = await allocateComplaintPublicId(complainantRoll);
+
         const complaint = new Complaint({
+            publicId,
             raisedBy: student._id,
             raisedByName: student.name,
             studentProfile,
             category: finalCategory,
             categoryId: categoryDoc._id,
             department: finalDepartment,
-            title: title.trim(),
+            title: shortTitle,
             description: description.trim(),
             location: location ? location.trim() : '',
             incidentDate: incidentDate ? new Date(incidentDate) : null,
             preferredResolution: preferredResolution
                 ? preferredResolution.trim()
                 : '',
-            priority: finalPriority,
+            priority: 'medium',
             complaintType: finalComplaintType,
             visibility: finalVisibility,
             isGroupComplaint: finalComplaintType === 'group',
@@ -313,35 +378,32 @@ const createComplaint = async (req, res) => {
 
         await complaint.save();
 
-        // Handle initial group invitations if provided
-        const invites = inviteRollNumbers || inviteUrns;
-        if (
-            finalComplaintType === 'group' &&
-            Array.isArray(invites) &&
-            invites.length > 0
-        ) {
-            for (const roll of invites) {
-                const trimmedRoll = String(roll).trim();
-                if (!trimmedRoll || trimmedRoll === student.rollNumber) {
-                    continue;
-                }
+        if (currentAssignee) {
+            await createNotification({
+                userId: currentAssignee,
+                title: 'New complaint for you',
+                message: `A new complaint ${complaint.publicId} "${complaint.title}" was routed to you.`,
+                type: 'complaint',
+                relatedComplaint: complaint._id
+            });
+        }
 
-                const invitedStudent = await User.findOne({
-                    rollNumber: trimmedRoll,
-                    role: 'student'
-                });
-
-                if (invitedStudent) {
-                    await ComplaintInvitation.create({
-                        complaint: complaint._id,
-                        student: invitedStudent._id,
-                        studentName: invitedStudent.name,
-                        studentRollNumber: invitedStudent.rollNumber,
-                        invitedBy: student._id,
-                        status: 'pending'
-                    }).catch(() => {});
+        if (finalVisibility === 'public') {
+            const recipients = await User.find({
+                isActive: true,
+                _id: {
+                    $nin: [student._id, currentAssignee].filter(Boolean)
                 }
-            }
+            }).select('_id');
+            await notifyUsers(
+                recipients.map((person) => person._id),
+                {
+                    title: 'New complaint',
+                    message: `A new complaint ${complaint.publicId} "${complaint.title}" was registered.`,
+                    type: 'complaint',
+                    relatedComplaint: complaint._id
+                }
+            );
         }
 
         await recordComplaintLog({
@@ -353,7 +415,7 @@ const createComplaint = async (req, res) => {
             newAssignee: currentAssignee,
             level: currentLevel,
             action: 'submitted',
-            remarks: `Complaint submitted by ${student.name} (${finalComplaintType}, ${finalVisibility}); routed to ${currentLevel}`
+            remarks: `Complaint ${complaint.publicId} submitted by ${student.name} (${finalComplaintType}, ${finalVisibility}); routed to ${currentLevel}`
         });
 
         res.status(201).json({
@@ -377,7 +439,8 @@ const getComplaints = async (req, res) => {
             category,
             complaintType,
             visibility,
-            myComplaints
+            myComplaints,
+            publicFeed
         } = req.query;
 
         const user = await User.findById(id).select('department role isActive');
@@ -392,7 +455,12 @@ const getComplaints = async (req, res) => {
         let filter = {};
 
         if (role === 'student') {
-            if (myComplaints === 'true') {
+            if (publicFeed === 'true') {
+                filter = {
+                    visibility: 'public',
+                    status: { $ne: 'withdrawn' }
+                };
+            } else if (myComplaints === 'true') {
                 filter = {
                     $or: [
                         { raisedBy: id },
@@ -402,7 +470,10 @@ const getComplaints = async (req, res) => {
             } else {
                 filter = {
                     $or: [
-                        { visibility: 'public' },
+                        {
+                            visibility: 'public',
+                            status: { $ne: 'withdrawn' }
+                        },
                         {
                             visibility: 'private',
                             $or: [
@@ -437,12 +508,16 @@ const getComplaints = async (req, res) => {
 
         const complaints = await Complaint.find(filter)
             .select(
-                'title status currentLevel department category priority complaintType visibility participantCount raisedByName createdAt'
+                'publicId title status currentLevel department category complaintType visibility participantCount raisedByName createdAt'
             )
             .sort({ createdAt: -1 })
             .skip((page - 1) * limit)
             .limit(Number(limit))
             .lean();
+
+        for (const row of complaints) {
+            row.title = titleWithoutStatus(row.title);
+        }
 
         const total = await Complaint.countDocuments(filter);
 
@@ -465,7 +540,10 @@ const getComplaintById = async (req, res) => {
             .populate('raisedBy', 'name email rollNumber department')
             .populate('currentAssignee', 'name email role department')
             .populate('assignedBy', 'name email role department')
-            .populate('participants.student', 'name email rollNumber department');
+            .populate(
+                'participants.student',
+                'name rollNumber department semester section'
+            );
 
         if (!complaint) {
             return res.status(404).json({
@@ -503,15 +581,215 @@ const getComplaintById = async (req, res) => {
             req.user.role
         );
 
+        const isParticipant = (complaint.participants || []).some((p) => {
+            const sid = p.student?._id?.toString() || p.student?.toString();
+            return sid === req.user.id;
+        });
+        if (
+            complaint.status === 'withdrawn' &&
+            !isCreator &&
+            !isStaff &&
+            !isParticipant
+        ) {
+            return res.status(404).json({
+                success: false,
+                message: 'Complaint not found'
+            });
+        }
+
         if (isCreator || isStaff) {
             invitations = await ComplaintInvitation.find({
                 complaint: complaint._id
             }).sort({ createdAt: -1 });
         }
 
-        res.json({ success: true, complaint, logs, invitations });
+        const serialized = serializeComplaintForUser(complaint, userContext);
+
+        res.json({
+            success: true,
+            complaint: serialized,
+            logs,
+            invitations,
+            canRevealContact: canResolveComplaintContact(
+                userContext,
+                complaint
+            )
+        });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+const addComplaintComment = async (req, res) => {
+    try {
+        const text = String(req.body?.remarks || req.body?.comment || '').trim();
+        if (!text) {
+            return res.status(400).json({
+                success: false,
+                message: 'Comment text is required'
+            });
+        }
+        if (text.length > 1000) {
+            return res.status(400).json({
+                success: false,
+                message: 'Comment must be 1000 characters or fewer'
+            });
+        }
+
+        const complaint = await Complaint.findById(req.params.id);
+        if (!complaint) {
+            return res.status(404).json({
+                success: false,
+                message: 'Complaint not found'
+            });
+        }
+
+        const user = await User.findById(req.user.id).select(
+            'department role isActive name'
+        );
+        if (!user?.isActive) {
+            return res.status(403).json({
+                success: false,
+                message: 'Account is inactive'
+            });
+        }
+
+        const userContext = {
+            id: req.user.id,
+            role: req.user.role,
+            department: user.department
+        };
+
+        if (!isUserAuthorizedForComplaint(complaint, userContext)) {
+            return res.status(403).json({
+                success: false,
+                message: 'You are not authorized to comment on this complaint'
+            });
+        }
+
+        await recordComplaintLog({
+            complaintId: complaint._id,
+            actor: user,
+            previousStatus: complaint.status,
+            newStatus: complaint.status,
+            action: 'comment',
+            remarks: text
+        });
+
+        const logs = await ComplaintLog.find({ complaint: complaint._id }).sort({
+            createdAt: 1
+        });
+
+        return res.status(201).json({
+            success: true,
+            message: 'Comment added',
+            logs
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
+const getComplaintContact = async (req, res) => {
+    try {
+        const complaint = await Complaint.findById(req.params.id)
+            .populate('raisedBy', 'name email phone rollNumber department')
+            .populate('currentAssignee', 'name role department');
+
+        if (!complaint) {
+            return res.status(404).json({
+                success: false,
+                message: 'Complaint not found'
+            });
+        }
+
+        const user = await User.findById(req.user.id).select(
+            'department role isActive phone email'
+        );
+        if (!user?.isActive) {
+            return res.status(403).json({
+                success: false,
+                message: 'Account is inactive'
+            });
+        }
+
+        const userContext = {
+            id: req.user.id,
+            role: req.user.role,
+            department: user.department
+        };
+
+        if (!isUserAuthorizedForComplaint(complaint, userContext)) {
+            return res.status(403).json({
+                success: false,
+                message: 'Access denied'
+            });
+        }
+
+        if (!canResolveComplaintContact(userContext, complaint)) {
+            return res.status(403).json({
+                success: false,
+                message:
+                    'You are not authorized to view complainant contact details for this complaint'
+            });
+        }
+
+        const raiser = await User.findById(complaint.raisedBy?._id || complaint.raisedBy)
+            .select('name email phone rollNumber department semester section');
+
+        await recordComplaintLog({
+            complaintId: complaint._id,
+            actor: user,
+            action: 'contact_viewed',
+            remarks: 'Complainant contact details viewed'
+        });
+
+        return res.json({
+            success: true,
+            contact: {
+                name: raiser?.name || complaint.studentProfile?.name,
+                email: raiser?.email || complaint.studentProfile?.email,
+                phone:
+                    raiser?.phone ||
+                    complaint.studentProfile?.phone ||
+                    '',
+                rollNumber:
+                    raiser?.rollNumber ||
+                    complaint.studentProfile?.rollNumber,
+                department:
+                    raiser?.department ||
+                    complaint.studentProfile?.department,
+                semester: raiser?.semester ?? complaint.studentProfile?.semester,
+                section:
+                    raiser?.section || complaint.studentProfile?.section
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+const getPublicComplaintStats = async (req, res) => {
+    try {
+        const registered = await Complaint.countDocuments({
+            status: { $ne: 'withdrawn' }
+        });
+        const resolved = await Complaint.countDocuments({ status: 'resolved' });
+        return res.json({
+            success: true,
+            stats: {
+                registered,
+                resolved
+            }
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: error.message
+        });
     }
 };
 
@@ -537,14 +815,14 @@ const inviteToComplaint = async (req, res) => {
             });
         }
 
-        if (complaint.complaintType !== 'group') {
+        if (complaint.complaintType !== 'group' || complaint.visibility !== 'public') {
             return res.status(400).json({
                 success: false,
-                message: 'Invitations are only supported for group complaints'
+                message: 'Invitations are only supported for public group complaints'
             });
         }
 
-        if (['resolved', 'rejected'].includes(complaint.status)) {
+        if (['resolved', 'rejected', 'withdrawn'].includes(complaint.status)) {
             return res.status(400).json({
                 success: false,
                 message: 'Cannot invite participants to a resolved or rejected complaint'
@@ -702,7 +980,14 @@ const respondToInvitation = async (req, res) => {
             });
         }
 
-        if (['resolved', 'rejected'].includes(complaint.status)) {
+        if (action === 'accept' && (complaint.complaintType !== 'group' || complaint.visibility !== 'public')) {
+            return res.status(400).json({
+                success: false,
+                message: 'Only public group complaints can accept new members'
+            });
+        }
+
+        if (['resolved', 'rejected', 'withdrawn'].includes(complaint.status)) {
             return res.status(400).json({
                 success: false,
                 message: 'Cannot respond to invitation for a closed complaint'
@@ -766,65 +1051,66 @@ const joinComplaint = async (req, res) => {
             });
         }
 
-        if (
-            complaint.complaintType !== 'group' ||
-            complaint.visibility !== 'public'
-        ) {
-            return res.status(400).json({
+        const eligibility = canJoinStoredComplaint(complaint, req.user.id);
+        if (!eligibility.ok) {
+            return res.status(eligibility.status).json({
                 success: false,
-                message: 'Only public group complaints can be joined'
-            });
-        }
-
-        if (['resolved', 'rejected'].includes(complaint.status)) {
-            return res.status(400).json({
-                success: false,
-                message: 'Cannot join a resolved or rejected complaint'
+                message: eligibility.message
             });
         }
 
         const student = await User.findById(req.user.id);
-        if (!student || student.role !== 'student') {
+        if (!student || student.role !== 'student' || !student.isActive) {
             return res.status(403).json({
                 success: false,
-                message: 'Only students can join group complaints'
+                message: 'Only active students can join a complaint'
             });
         }
 
-        const alreadyParticipant = complaint.participants.some(
-            (p) => p.student.toString() === req.user.id
+        const updated = await Complaint.findOneAndUpdate(
+            {
+                _id: complaint._id,
+                visibility: 'public',
+                status: { $nin: ['resolved', 'rejected', 'withdrawn'] },
+                raisedBy: { $ne: student._id },
+                'participants.student': { $ne: student._id }
+            },
+            {
+                $push: {
+                    participants: {
+                        student: student._id,
+                        name: student.name,
+                        rollNumber: student.rollNumber || '',
+                        joinedAt: new Date()
+                    }
+                },
+                $addToSet: { groupMembers: student._id }
+            },
+            { new: true }
         );
-        if (alreadyParticipant) {
-            return res.status(400).json({
-                success: false,
-                message: 'You are already a participant in this complaint'
-            });
+
+        const saved = updated || complaint;
+        if (updated) {
+            saved.participantCount = saved.participants.length;
+            await saved.save();
+            await ComplaintInvitation.findOneAndUpdate(
+                {
+                    complaint: complaint._id,
+                    student: student._id,
+                    status: 'pending'
+                },
+                { status: 'accepted', respondedAt: new Date() }
+            );
         }
-
-        complaint.participants.push({
-            student: student._id,
-            name: student.name,
-            rollNumber: student.rollNumber || '',
-            joinedAt: new Date()
-        });
-
-        if (!complaint.groupMembers.includes(student._id)) {
-            complaint.groupMembers.push(student._id);
-        }
-
-        complaint.participantCount = complaint.participants.length;
-        await complaint.save();
-
-        // Mark any pending invitation as accepted
-        await ComplaintInvitation.findOneAndUpdate(
-            { complaint: complaint._id, student: student._id, status: 'pending' },
-            { status: 'accepted', respondedAt: new Date() }
-        );
 
         res.json({
             success: true,
-            message: 'Joined group complaint successfully',
-            participantCount: complaint.participantCount
+            alreadyMember: !updated,
+            message: updated
+                ? 'Joined this complaint'
+                : 'You are already a participant in this complaint',
+            participantCount: saved.participants.length,
+            isMember: true
         });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -870,8 +1156,86 @@ const leaveComplaint = async (req, res) => {
 
         res.json({
             success: true,
-            message: 'Left group complaint successfully',
+            message: 'Left this complaint',
             participantCount: complaint.participantCount
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// ==================== 9. WITHDRAW OWN COMPLAINT ====================
+const withdrawComplaint = async (req, res) => {
+    try {
+        const complaint = await Complaint.findById(req.params.id);
+        if (!complaint) {
+            return res.status(404).json({
+                success: false,
+                message: 'Complaint not found'
+            });
+        }
+
+        const isOwner =
+            req.user.role === 'student' &&
+            complaint.raisedBy.toString() === req.user.id;
+
+        if (!isOwner) {
+            return res.status(403).json({
+                success: false,
+                message:
+                    'Only the student who filed this complaint can withdraw it'
+            });
+        }
+
+        if (complaint.status === 'withdrawn') {
+            return res.json({
+                success: true,
+                message: 'Complaint is already withdrawn'
+            });
+        }
+
+        if (complaint.status === 'resolved') {
+            return res.status(400).json({
+                success: false,
+                message: 'A resolved complaint cannot be withdrawn'
+            });
+        }
+
+        const actor = await loadActor(req.user.id);
+        const previousStatus = complaint.status;
+        complaint.status = 'withdrawn';
+        await complaint.save();
+
+        await ComplaintInvitation.updateMany(
+            { complaint: complaint._id, status: 'pending' },
+            { status: 'declined', respondedAt: new Date() }
+        );
+
+        await recordComplaintLog({
+            complaintId: complaint._id,
+            actor,
+            previousStatus,
+            newStatus: 'withdrawn',
+            previousAssignee: complaint.currentAssignee,
+            newAssignee: complaint.currentAssignee,
+            level: complaint.currentLevel,
+            action: 'withdrawn',
+            remarks: `Complaint ${complaint.publicId || ''} withdrawn by the student who filed it`.trim()
+        });
+
+        if (complaint.currentAssignee) {
+            await createNotification({
+                userId: complaint.currentAssignee,
+                title: 'Complaint update',
+                message: `The student withdrew complaint ${complaint.publicId || ''}`.trim(),
+                type: 'complaint',
+                relatedComplaint: complaint._id
+            });
+        }
+
+        res.json({
+            success: true,
+            message: 'Complaint withdrawn'
         });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -979,6 +1343,15 @@ const assignComplaint = async (req, res) => {
         complaint.status = 'assigned';
         await complaint.save();
 
+        await notifyComplaintWatchers(complaint, {
+            actorId: assignerId,
+            extraUserIds: [assignee._id],
+            title: 'Complaint update',
+            message: complaint.publicId
+                ? `Complaint ${complaint.publicId} "${complaint.title}" is now assigned.`
+                : `Complaint "${complaint.title}" is now assigned.`
+        });
+
         await recordComplaintLog({
             complaintId: complaint._id,
             actor: assigner,
@@ -1067,6 +1440,14 @@ const updateComplaintStatus = async (req, res) => {
 
         complaint.status = action;
         await complaint.save();
+
+        await notifyComplaintWatchers(complaint, {
+            actorId: actor._id,
+            title: 'Complaint update',
+            message: complaint.publicId
+                ? `Your complaint ${complaint.publicId} "${complaint.title}" is now ${action}.`
+                : `Your complaint "${complaint.title}" is now ${action}.`
+        });
 
         await recordComplaintLog({
             complaintId: complaint._id,
@@ -1208,6 +1589,15 @@ const escalateComplaint = async (req, res) => {
         complaint.status = 'escalated';
         await complaint.save();
 
+        await notifyComplaintWatchers(complaint, {
+            actorId: actor._id,
+            extraUserIds: [nextAssignee],
+            title: 'Complaint update',
+            message: complaint.publicId
+                ? `Complaint ${complaint.publicId} "${complaint.title}" was escalated.`
+                : `Complaint "${complaint.title}" was escalated.`
+        });
+
         await recordComplaintLog({
             complaintId: complaint._id,
             actor,
@@ -1298,6 +1688,14 @@ const resolveComplaint = async (req, res) => {
         complaint.resolvedAt = new Date();
         await complaint.save();
 
+        await notifyComplaintWatchers(complaint, {
+            actorId: actor._id,
+            title: 'Complaint update',
+            message: complaint.publicId
+                ? `Your complaint ${complaint.publicId} "${complaint.title}" has been resolved.`
+                : `Your complaint "${complaint.title}" has been resolved.`
+        });
+
         await recordComplaintLog({
             complaintId: complaint._id,
             actor,
@@ -1326,12 +1724,13 @@ const handleTimeouts = async () => {
 
     const expiredComplaints = await Complaint.find({
         levelDeadline: { $lt: now },
-        status: { $nin: ['resolved', 'rejected'] }
+        status: { $nin: ['resolved', 'rejected', 'withdrawn'] }
     });
 
     for (const complaint of expiredComplaints) {
         const previousStatus = complaint.status;
         const previousAssignee = complaint.currentAssignee;
+        let changed = false;
 
         if (complaint.currentLevel === 'advisor') {
             const hod = await findDepartmentHod(complaint.department);
@@ -1355,6 +1754,7 @@ const handleTimeouts = async () => {
                 remarks:
                     'Advisor has not solved the complaint within the deadline'
             });
+            changed = true;
         } else if (complaint.currentLevel === 'hod') {
             const dean = await findInstitutionalDean();
 
@@ -1376,6 +1776,7 @@ const handleTimeouts = async () => {
                 remarks:
                     'HOD has not solved the complaint within the deadline'
             });
+            changed = true;
         } else if (complaint.currentLevel === 'dean') {
             const vc = await findViceChancellor();
 
@@ -1396,6 +1797,17 @@ const handleTimeouts = async () => {
                 remarks:
                     'Dean has not solved the complaint within the deadline — escalated to VC'
             });
+            changed = true;
+        }
+
+        if (changed) {
+            await notifyComplaintWatchers(complaint, {
+                extraUserIds: [complaint.currentAssignee],
+                title: 'Complaint update',
+                message: complaint.publicId
+                    ? `Complaint ${complaint.publicId} "${complaint.title}" was escalated.`
+                    : `Complaint "${complaint.title}" was escalated.`
+            });
         }
     }
 
@@ -1407,14 +1819,18 @@ const handleTimeouts = async () => {
 export {
     getCategories,
     getComplaintDepartments,
+    getPublicComplaintStats,
     createComplaint,
     getComplaints,
     getComplaintById,
+    getComplaintContact,
+    addComplaintComment,
     inviteToComplaint,
     getMyInvitations,
     respondToInvitation,
     joinComplaint,
     leaveComplaint,
+    withdrawComplaint,
     assignComplaint,
     updateComplaintStatus,
     escalateComplaint,

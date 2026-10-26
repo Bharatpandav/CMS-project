@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { complaintsApi } from '../api/client.js';
 import { AdminAuthModal } from '../components/AdminAuthModal.jsx';
 import { LoginModal } from '../components/LoginModal.jsx';
+import { PublicHeaderActions } from '../components/PublicHeaderActions.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { getPostLoginPath } from '../utils/roleRedirect.js';
 import { canAccessManagementPortal } from '../utils/managementAccess.js';
@@ -10,6 +11,8 @@ import { getManagementDashboardPath } from '../utils/managementAccess.js';
 import { isAdminStaffRole } from '../utils/staffRoles.js';
 import { AppIcon } from '../components/AppIcon.jsx';
 import { IconMenu } from '../components/icons.jsx';
+import { ArrowRight, UserCircle } from 'lucide-react';
+import { UNIFIED_PROFILE_PATH } from '../utils/appPaths.js';
 import '../styles/home.css';
 import '../styles/cms-surfaces.css';
 
@@ -59,6 +62,8 @@ const STEPS = [
     }
 ];
 
+const STATS_REFRESH_MS = 60_000;
+
 function scrollToId(id) {
     const el = document.getElementById(id);
     if (el) {
@@ -71,18 +76,26 @@ export function HomePage() {
     const [adminLoginOpen, setAdminLoginOpen] = useState(false);
     const [adminLoginMode, setAdminLoginMode] = useState('admin');
     const [mobileNav, setMobileNav] = useState(false);
-    const [deptCount, setDeptCount] = useState(null);
+    const [stats, setStats] = useState(null);
+    const [statsError, setStatsError] = useState('');
+    const [statsLoading, setStatsLoading] = useState(true);
+    const [loginPostPath, setLoginPostPath] = useState(null);
     const [searchParams, setSearchParams] = useSearchParams();
     const { isAuthenticated, user } = useAuth();
     const navigate = useNavigate();
 
-    const openLogin = useCallback(() => {
-        setLoginOpen(true);
-        setSearchParams({ login: '1' }, { replace: true });
-    }, [setSearchParams]);
+    const openLogin = useCallback(
+        (postPath = null) => {
+            setLoginPostPath(postPath);
+            setLoginOpen(true);
+            setSearchParams({ login: '1' }, { replace: true });
+        },
+        [setSearchParams]
+    );
 
     const closeLogin = useCallback(() => {
         setLoginOpen(false);
+        setLoginPostPath(null);
         if (searchParams.get('login')) {
             setSearchParams({}, { replace: true });
         }
@@ -110,6 +123,18 @@ export function HomePage() {
         }
     }, [searchParams, setSearchParams]);
 
+    const loadStats = useCallback(async () => {
+        try {
+            const data = await complaintsApi.getPublicStats();
+            setStats(data.stats);
+            setStatsError('');
+        } catch (err) {
+            setStatsError(err.message || 'Unable to load statistics');
+        } finally {
+            setStatsLoading(false);
+        }
+    }, []);
+
     useEffect(() => {
         if (searchParams.get('login') === '1') {
             setLoginOpen(true);
@@ -123,31 +148,27 @@ export function HomePage() {
     }, [searchParams, openAdminLogin]);
 
     useEffect(() => {
-        let cancelled = false;
-        (async () => {
-            try {
-                const data = await complaintsApi.getCategories();
-                const departments = new Set(
-                    (data.categories || [])
-                        .map((c) => c.targetDepartment)
-                        .filter(Boolean)
-                );
-                if (!cancelled) setDeptCount(departments.size);
-            } catch {
-                if (!cancelled) setDeptCount(null);
-            }
-        })();
-        return () => {
-            cancelled = true;
-        };
-    }, []);
+        loadStats();
+        const id = window.setInterval(loadStats, STATS_REFRESH_MS);
+        return () => window.clearInterval(id);
+    }, [loadStats]);
 
     const handleLoginClick = () => {
         if (isAuthenticated && user) {
+            if (user.role === 'student') {
+                navigate(UNIFIED_PROFILE_PATH);
+                return;
+            }
             navigate(getPostLoginPath(user));
             return;
         }
         openLogin();
+    };
+
+    const loginButtonLabel = () => {
+        if (!isAuthenticated) return 'Login';
+        if (user?.role === 'student') return 'My Profile';
+        return 'Open Portal';
     };
 
     const handleAdminLoginClick = () => {
@@ -162,6 +183,25 @@ export function HomePage() {
             }
         }
         openAdminLogin('admin');
+    };
+
+    const adminButtonLabel = () => {
+        if (!isAuthenticated || !user) return 'Login as Admin';
+        if (canAccessManagementPortal(user.role)) return 'Management Portal';
+        if (isAdminStaffRole(user.role)) return 'Admin Portal';
+        return 'Login as Admin';
+    };
+
+    const handleSubmitComplaint = () => {
+        if (isAuthenticated && user?.role === 'student') {
+            navigate('/student/complaints/register');
+            return;
+        }
+        if (isAuthenticated && user) {
+            navigate(getPostLoginPath(user));
+            return;
+        }
+        openLogin('/student/complaints/register');
     };
 
     const year = new Date().getFullYear();
@@ -185,6 +225,8 @@ export function HomePage() {
                             University Complaint Management System
                         </span>
                     </a>
+
+                    <PublicHeaderActions onRequestLogin={openLogin} />
 
                     <button
                         type="button"
@@ -238,23 +280,25 @@ export function HomePage() {
                         </button>
                         <button
                             type="button"
-                            className="public-header__admin"
+                            className="public-header__admin public-header__auth-btn"
                             onClick={() => {
                                 setMobileNav(false);
                                 handleAdminLoginClick();
                             }}
                         >
-                            Login as Admin
+                            <UserCircle size={18} strokeWidth={1.75} aria-hidden />
+                            {adminButtonLabel()}
                         </button>
                         <button
                             type="button"
-                            className="public-header__login"
+                            className="public-header__login public-header__auth-btn"
                             onClick={() => {
                                 setMobileNav(false);
                                 handleLoginClick();
                             }}
                         >
-                            {isAuthenticated ? 'Open Portal' : 'Login'}
+                            <UserCircle size={18} strokeWidth={1.75} aria-hidden />
+                            {loginButtonLabel()}
                         </button>
                     </nav>
                 </div>
@@ -271,30 +315,60 @@ export function HomePage() {
                             Report issues, track progress, and access university
                             support through one simple, transparent platform.
                         </p>
-                        <div className="hero__actions">
+                        <div className="hero__actions hero__actions--triple">
                             <button
                                 type="button"
-                                className="btn btn--primary"
+                                className="btn btn--primary btn--with-icon cms-btn-reflect"
                                 onClick={handleLoginClick}
                             >
-                                {isAuthenticated ? 'Open portal' : 'Login'}
+                                <UserCircle size={18} strokeWidth={1.75} aria-hidden />
+                                {loginButtonLabel()}
                             </button>
                             <button
                                 type="button"
-                                className="btn btn--outline"
-                                onClick={() => scrollToId('how-it-works')}
-                            >
-                                Learn More
-                            </button>
-                            <button
-                                type="button"
-                                className="btn btn--admin"
+                                className="btn btn--admin btn--with-icon cms-btn-reflect"
                                 onClick={handleAdminLoginClick}
                             >
-                                Login as Admin
+                                <UserCircle size={18} strokeWidth={1.75} aria-hidden />
+                                {adminButtonLabel()}
+                            </button>
+                            <button
+                                type="button"
+                                className="btn btn--outline btn--with-icon cms-btn-reflect"
+                                onClick={handleSubmitComplaint}
+                            >
+                                Submit a New Complaint
+                                <ArrowRight size={18} strokeWidth={1.75} aria-hidden />
                             </button>
                         </div>
                     </div>
+                </section>
+
+                <section
+                    className="stats-strip stats-strip--live"
+                    aria-label="Complaint statistics"
+                >
+                    {statsLoading ? (
+                        <p className="stats-strip__status">Loading statistics…</p>
+                    ) : statsError ? (
+                        <p className="stats-strip__status stats-strip__status--error">
+                            {statsError}
+                            <button type="button" onClick={loadStats}>
+                                Retry
+                            </button>
+                        </p>
+                    ) : (
+                        <>
+                            <div className="stats-strip__item">
+                                <strong>{stats?.registered ?? 0}</strong>
+                                <span>Complaints Registered</span>
+                            </div>
+                            <div className="stats-strip__item">
+                                <strong>{stats?.resolved ?? 0}</strong>
+                                <span>Complaints Resolved</span>
+                            </div>
+                        </>
+                    )}
                 </section>
 
                 <section className="features" aria-labelledby="features-title">
@@ -313,21 +387,6 @@ export function HomePage() {
                         ))}
                     </div>
                 </section>
-
-                {deptCount !== null ? (
-                    <section
-                        className="stats-strip stats-strip--minimal"
-                        aria-label="Platform overview"
-                    >
-                        <div className="stats-strip__item">
-                            <strong>{deptCount}</strong>
-                            <span>
-                                Service departments mapped from active
-                                categories
-                            </span>
-                        </div>
-                    </section>
-                ) : null}
 
                 <section
                     id="about"
@@ -403,7 +462,11 @@ export function HomePage() {
                 </div>
             </footer>
 
-            <LoginModal open={loginOpen} onClose={closeLogin} />
+            <LoginModal
+                open={loginOpen}
+                onClose={closeLogin}
+                postLoginPath={loginPostPath}
+            />
             <AdminAuthModal
                 open={adminLoginOpen}
                 onClose={closeAdminLogin}

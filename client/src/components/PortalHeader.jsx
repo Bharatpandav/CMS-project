@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { IconBell, IconMenu } from './icons.jsx';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { IconMenu } from './icons.jsx';
+import { NotificationBell } from './NotificationBell.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { UNIFIED_DASHBOARD_PATH, getProfilePath } from '../utils/appPaths.js';
 import { getStaffRoleLabel } from '../utils/staffRoles.js';
@@ -62,27 +63,8 @@ export function PortalHeader({ onMenuClick, menuOpen = false }) {
                     </span>
                 </Link>
 
-                <nav className="portal-header__nav" aria-label="Quick links">
-                    <NavLink
-                        to={UNIFIED_DASHBOARD_PATH}
-                        className={({ isActive }) =>
-                            isActive ? 'is-active' : undefined
-                        }
-                    >
-                        Dashboard
-                    </NavLink>
-                </nav>
-
                 <div className="portal-header__actions">
-                    <button
-                        type="button"
-                        className="portal-header__bell"
-                        aria-label="Notifications"
-                        title="Notifications not available yet"
-                        disabled
-                    >
-                        <IconBell />
-                    </button>
+                    <NotificationBell className="public-header__icon-btn" />
 
                     <div className="portal-profile" ref={menuRef}>
                         <button

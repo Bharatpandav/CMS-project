@@ -51,7 +51,8 @@ function filterBySearch(items, query) {
             c.title?.toLowerCase().includes(q) ||
             c.department?.toLowerCase().includes(q) ||
             c.category?.toLowerCase().includes(q) ||
-            String(c._id).toLowerCase().includes(q)
+            String(c._id).toLowerCase().includes(q) ||
+            c.publicId?.toLowerCase().includes(q)
     );
 }
 

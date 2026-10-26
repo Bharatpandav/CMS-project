@@ -1,13 +1,15 @@
-import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { ArrowUpRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import {
     buildListReturnState,
     resolveComplaintsListPath,
     saveListUiState
 } from '../utils/navigationPaths.js';
-import { IconMoreVertical } from './icons.jsx';
-import { PriorityBadge, StatusBadge } from './StatusBadge.jsx';
+import { StatusBadge } from './StatusBadge.jsx';
+import { complaintSubject } from '../utils/complaintTitle.js';
+import { complaintPublicId } from '../utils/complaintPublicId.js';
+import { complaintAccessLabel } from '../utils/complaintAccess.js';
 import { EmptyState } from './ui/index.js';
 
 function formatDate(value) {
@@ -17,12 +19,6 @@ function formatDate(value) {
         month: 'short',
         day: 'numeric'
     });
-}
-
-function shortId(id) {
-    if (!id) return '—';
-    const str = String(id);
-    return str.length > 8 ? `#${str.slice(-8).toUpperCase()}` : `#${str}`;
 }
 
 export function RecentComplaintsTable({
@@ -35,7 +31,6 @@ export function RecentComplaintsTable({
 }) {
     const { user } = useAuth();
     const location = useLocation();
-    const [openMenu, setOpenMenu] = useState(null);
     const complaintDetailBase =
         complaintDetailBaseProp ||
         resolveComplaintsListPath(user?.role, location.pathname);
@@ -79,16 +74,30 @@ export function RecentComplaintsTable({
                         <th>Status</th>
                         <th>Assigned To</th>
                         <th>Date</th>
-                        <th>Priority</th>
                         <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
                     {complaints.map((row) => (
-                        <tr key={row._id}>
-                            <td className="mono">{shortId(row._id)}</td>
-                            <td className="title-cell" title={row.title}>
-                                {row.title}
+                        <tr
+                            key={row._id}
+                            className={
+                                row.status === 'withdrawn' ? 'is-withdrawn' : undefined
+                            }
+                        >
+                            <td className="mono">{complaintPublicId(row) || '—'}</td>
+                            <td className="title-cell" title={complaintSubject(row.title)}>
+                                <span className="title-cell__line">
+                                    {row.status === 'withdrawn' ? (
+                                        <StatusBadge status="withdrawn" />
+                                    ) : null}
+                                    <span className="title-cell__text">
+                                        {complaintSubject(row.title)}
+                                    </span>
+                                </span>
+                                <span className="title-cell__access">
+                                    {complaintAccessLabel(row)}
+                                </span>
                             </td>
                             <td>{row.department || '—'}</td>
                             <td>
@@ -100,40 +109,17 @@ export function RecentComplaintsTable({
                                     : '—'}
                             </td>
                             <td>{formatDate(row.createdAt)}</td>
-                            <td>
-                                <PriorityBadge priority={row.priority} />
-                            </td>
                             <td className="action-cell">
-                                <div className="row-menu">
-                                    <button
-                                        type="button"
-                                        className="icon-btn"
-                                        aria-label="Actions"
-                                        onClick={() =>
-                                            setOpenMenu(
-                                                openMenu === row._id
-                                                    ? null
-                                                    : row._id
-                                            )
-                                        }
-                                    >
-                                        <IconMoreVertical />
-                                    </button>
-                                    {openMenu === row._id ? (
-                                        <div className="row-menu__dropdown">
-                                            <Link
-                                                to={`${complaintDetailBase}/${row._id}`}
-                                                state={listReturn}
-                                                onClick={() => {
-                                                    setOpenMenu(null);
-                                                    persistListUi();
-                                                }}
-                                            >
-                                                View details
-                                            </Link>
-                                        </div>
-                                    ) : null}
-                                </div>
+                                <Link
+                                    className="view-details-btn cms-btn-reflect"
+                                    to={`${complaintDetailBase}/${row._id}`}
+                                    state={listReturn}
+                                    onClick={persistListUi}
+                                    aria-label={`View details for ${complaintSubject(row.title)}`}
+                                >
+                                    <ArrowUpRight size={16} aria-hidden />
+                                    View details
+                                </Link>
                             </td>
                         </tr>
                     ))}

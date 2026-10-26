@@ -42,6 +42,7 @@ export function PasswordField({
                 <button
                     type="button"
                     className="password-field__toggle"
+                    data-no-reflect
                     onClick={() => setVisible((v) => !v)}
                     aria-label={visible ? 'Hide password' : 'Show password'}
                     disabled={disabled}

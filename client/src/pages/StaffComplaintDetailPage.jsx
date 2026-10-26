@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
+import { ComplaintDetailsView } from '../components/ComplaintDetailsView.jsx';
 import { PageHeader } from '../components/PageHeader.jsx';
-import { resolveComplaintsListPath } from '../utils/navigationPaths.js';
+import { isSafeInternalPath, resolveComplaintsListPath } from '../utils/navigationPaths.js';
+import '../styles/complaint-detail.css';
 import { complaintsApi, staffApi } from '../api/client.js';
-import { PriorityBadge, StatusBadge } from '../components/StatusBadge.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 export function StaffComplaintDetailPage() {
     const { id } = useParams();
@@ -13,11 +14,14 @@ export function StaffComplaintDetailPage() {
         user?.role,
         location.pathname
     );
-    const dashboardTo = location.pathname.startsWith('/management')
-        ? '/management/dashboard'
-        : '/app/dashboard';
+    const from = location.state?.from;
+    const backTo =
+        typeof from === 'string' && isSafeInternalPath(from)
+            ? from
+            : listPath;
 
     const [data, setData] = useState(null);
+    const [canRevealContact, setCanRevealContact] = useState(false);
     const [assignable, setAssignable] = useState([]);
     const [error, setError] = useState('');
     const [actionError, setActionError] = useState('');
@@ -34,6 +38,7 @@ export function StaffComplaintDetailPage() {
         try {
             const res = await complaintsApi.getById(id);
             setData(res);
+            setCanRevealContact(Boolean(res.canRevealContact));
             const dept = res.complaint?.department;
             if (
                 dept &&
@@ -92,7 +97,7 @@ export function StaffComplaintDetailPage() {
 
     const c = data?.complaint;
     const logs = data?.logs || [];
-    const terminal = ['resolved', 'rejected'].includes(c?.status);
+    const terminal = ['resolved', 'rejected', 'withdrawn'].includes(c?.status);
     const role = user?.role;
 
     const canAcceptReject =
@@ -111,20 +116,14 @@ export function StaffComplaintDetailPage() {
 
     return (
         <div className="page-stack">
-            <PageHeader
-                back={{ fallbackTo: listPath, label: 'Complaints' }}
-                breadcrumbs={[
-                    { to: dashboardTo, label: 'Dashboard' },
-                    { to: listPath, label: 'Complaints' },
-                    { label: 'Details' }
-                ]}
-                title={c?.title}
-                actions={
-                    <div className="detail-badges">
-                        <StatusBadge status={c?.status} />
-                        <PriorityBadge priority={c?.priority} />
-                    </div>
-                }
+            <ComplaintDetailsView
+                complaint={c}
+                logs={logs}
+                backTo={backTo}
+                backLabel="Complaints"
+                canRevealContact={canRevealContact}
+                currentUser={user}
+                onMembershipChange={load}
             />
 
             {actionError ? (
@@ -134,39 +133,7 @@ export function StaffComplaintDetailPage() {
                 <p className="form-success" role="status">{actionSuccess}</p>
             ) : null}
 
-            <div className="staff-detail-grid">
-                <article className="panel">
-                    <h2>Details</h2>
-                    <p>{c?.description}</p>
-                    <dl className="detail-grid">
-                        <div>
-                            <dt>Department</dt>
-                            <dd>{c?.department}</dd>
-                        </div>
-                        <div>
-                            <dt>Category</dt>
-                            <dd>{c?.category}</dd>
-                        </div>
-                        <div>
-                            <dt>Status</dt>
-                            <dd>{c?.status}</dd>
-                        </div>
-                        <div>
-                            <dt>Level</dt>
-                            <dd>{c?.currentLevel}</dd>
-                        </div>
-                        <div>
-                            <dt>Assignee</dt>
-                            <dd>{c?.currentAssignee?.name || '—'}</dd>
-                        </div>
-                        <div>
-                            <dt>Visibility</dt>
-                            <dd>{c?.visibility}</dd>
-                        </div>
-                    </dl>
-                </article>
-
-                {!terminal ? (
+            {!terminal ? (
                     <article className="panel staff-actions-panel">
                         <h2>Actions</h2>
 
@@ -360,7 +327,6 @@ export function StaffComplaintDetailPage() {
                         ) : null}
                     </article>
                 ) : null}
-            </div>
 
             <article className="panel">
                 <h2>Audit history</h2>

@@ -249,28 +249,11 @@ button[type='submit']:hover:not(:disabled),
     border-color: #e9d5ff;
 }
 
-.badge--priority-low {
-    background: var(--secondary);
-    color: var(--text-secondary);
-    border-color: var(--border);
-}
-
-.badge--priority-medium {
-    background: var(--info-bg);
-    color: var(--info);
-    border-color: var(--info-border);
-}
-
-.badge--priority-high {
-    background: var(--warning-bg);
-    color: var(--warning);
-    border-color: var(--warning-border);
-}
-
-.badge--priority-urgent {
-    background: var(--danger-bg);
-    color: var(--danger);
-    border-color: var(--danger-border);
+.badge--status-withdrawn {
+    background: #fff1f2;
+    color: #9f1239;
+    border-color: #fecdd3;
+    font-weight: 700;
 }
 
 /* Navigation */
@@ -342,10 +325,24 @@ button[type='submit']:hover:not(:disabled),
 .btn--outline,
 .btn--admin,
 .public-header__admin {
-    background: var(--surface) !important;
-    border: 1px solid var(--border-strong) !important;
+    background: #f0f5fb !important;
+    border: 1px solid #94a3b8 !important;
     color: var(--foreground) !important;
     font-weight: 600;
+    box-shadow:
+        0 1px 2px rgba(15, 39, 68, 0.08),
+        0 0 0 1px rgba(15, 39, 68, 0.04);
+}
+
+.btn--outline:hover,
+.btn--admin:hover,
+.public-header__admin:hover {
+    background: #dce8f5 !important;
+    border-color: var(--public-navy, #0f2744) !important;
+    color: var(--public-navy, #0f2744) !important;
+    box-shadow:
+        0 3px 10px rgba(15, 39, 68, 0.14),
+        0 0 0 1px rgba(15, 39, 68, 0.08);
 }
 
 .inline-alert {

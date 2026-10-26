@@ -4,13 +4,20 @@ import { COMPLAINT_DEPARTMENTS } from '../constants/complaintDepartments.js';
 import { Link, useNavigate } from 'react-router-dom';
 import { buildListReturnState } from '../utils/navigationPaths.js';
 import { authApi, complaintsApi } from '../api/client.js';
+import {
+    titleMentionsAssignee,
+    titleMentionsGroupInvite,
+    titleMentionsStatus
+} from '../utils/complaintTitle.js';
 import { suggestComplaintDepartment } from '../utils/complaintDepartment.js';
 import { AppIcon } from '../components/AppIcon.jsx';
+import { ImagePreview } from '../components/ImagePreview.jsx';
 import { PageHeader } from '../components/PageHeader.jsx';
 import { InputGroup } from '../components/ui/index.js';
 import '../styles/register-complaint.css';
 
-const MAX_TITLE = 100;
+const MAX_TITLE = 60;
+const MAX_TITLE_WORDS = 8;
 const MAX_DESCRIPTION = 500;
 const MAX_IMAGE_FILES = 5;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -19,13 +26,6 @@ const ACCEPTED_IMAGE_TYPES = [
     'image/png',
     'image/webp',
     'image/gif'
-];
-
-const PRIORITIES = [
-    { value: 'low', label: 'Low' },
-    { value: 'medium', label: 'Medium' },
-    { value: 'high', label: 'High' },
-    { value: 'urgent', label: 'Urgent' }
 ];
 
 const GUIDELINES = [
@@ -44,6 +44,61 @@ function readFileAsDataUrl(file) {
         reader.onerror = () => reject(new Error('Failed to read file'));
         reader.readAsDataURL(file);
     });
+}
+
+function compressImageFile(file) {
+    if (!file?.type?.startsWith('image/')) return Promise.resolve(file);
+    return new Promise((resolve) => {
+        const url = URL.createObjectURL(file);
+        const image = new Image();
+        image.onload = () => {
+            const maxEdge = 1600;
+            const scale = Math.min(
+                1,
+                maxEdge / Math.max(image.width || 1, image.height || 1)
+            );
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.round(image.width * scale));
+            canvas.height = Math.max(1, Math.round(image.height * scale));
+            const context = canvas.getContext('2d');
+            if (!context) {
+                URL.revokeObjectURL(url);
+                resolve(file);
+                return;
+            }
+            context.drawImage(image, 0, 0, canvas.width, canvas.height);
+            canvas.toBlob(
+                (blob) => {
+                    URL.revokeObjectURL(url);
+                    if (!blob || blob.size >= file.size) {
+                        resolve(file);
+                        return;
+                    }
+                    const name = file.name.replace(/\.\w+$/, '') || 'image';
+                    resolve(
+                        new File([blob], `${name}.jpg`, {
+                            type: 'image/jpeg',
+                            lastModified: Date.now()
+                        })
+                    );
+                },
+                'image/jpeg',
+                0.72
+            );
+        };
+        image.onerror = () => {
+            URL.revokeObjectURL(url);
+            resolve(file);
+        };
+        image.src = url;
+    });
+}
+
+function toShortTitle(value) {
+    return String(value || '')
+        .replace(/[\r\n\t]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
 }
 
 function formatBytes(bytes) {
@@ -76,12 +131,11 @@ export function RegisterComplaintPage() {
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [location, setLocation] = useState('');
-    const [priority, setPriority] = useState('medium');
-    const [complaintType, setComplaintType] = useState('solo');
     const [visibility, setVisibility] = useState('public');
-    const [inviteInput, setInviteInput] = useState('');
     const [undertaking, setUndertaking] = useState(false);
     const [imageFiles, setImageFiles] = useState([]);
+    const [preview, setPreview] = useState(null);
+    const imageFilesRef = useRef([]);
 
     const [fieldErrors, setFieldErrors] = useState({});
     const [formError, setFormError] = useState('');
@@ -98,8 +152,7 @@ export function RegisterComplaintPage() {
                     categoryId ||
                     department ||
                     location.trim() ||
-                    imageFiles.length ||
-                    inviteInput.trim()
+                    imageFiles.length
             ),
         [
             success,
@@ -109,8 +162,7 @@ export function RegisterComplaintPage() {
             categoryId,
             department,
             location,
-            imageFiles.length,
-            inviteInput
+            imageFiles.length
         ]
     );
     useUnsavedChangesPrompt(hasDraft);
@@ -166,11 +218,21 @@ export function RegisterComplaintPage() {
         setDepartment(suggestedDepartment || '');
     }, [suggestedDepartment]);
 
+    const chooseVisibility = (next) => {
+        setVisibility(next);
+    };
+
     useEffect(() => {
-        if (complaintType === 'group' && visibility === 'private') {
-            setVisibility('public');
-        }
-    }, [complaintType, visibility]);
+        imageFilesRef.current = imageFiles;
+    }, [imageFiles]);
+
+    useEffect(() => {
+        return () => {
+            imageFilesRef.current.forEach((item) => {
+                if (item.url) URL.revokeObjectURL(item.url);
+            });
+        };
+    }, []);
 
     const isDirty =
         categoryId ||
@@ -178,15 +240,8 @@ export function RegisterComplaintPage() {
         title.trim() ||
         description.trim() ||
         location.trim() ||
-        inviteInput.trim() ||
         imageFiles.length > 0 ||
         undertaking;
-
-    const parseInviteUrns = () =>
-        inviteInput
-            .split(/[\n,;]+/)
-            .map((s) => s.trim())
-            .filter(Boolean);
 
     const validate = () => {
         const errors = {};
@@ -199,10 +254,22 @@ export function RegisterComplaintPage() {
         } else if (!departmentOptions.includes(department)) {
             errors.department = 'Please choose a valid department from the list';
         }
-        if (!title.trim()) {
+        const shortTitle = toShortTitle(title);
+        const titleWords = shortTitle ? shortTitle.split(' ').length : 0;
+        if (!shortTitle) {
             errors.title = 'Complaint title is required';
-        } else if (title.trim().length > MAX_TITLE) {
-            errors.title = `Title must be ${MAX_TITLE} characters or fewer`;
+        } else if (
+            shortTitle.length > MAX_TITLE ||
+            titleWords > MAX_TITLE_WORDS
+        ) {
+            errors.title = `Use a short title of up to ${MAX_TITLE_WORDS} words on one line`;
+        } else if (titleMentionsGroupInvite(shortTitle)) {
+            errors.title = 'Do not mention a group invite in the title';
+        } else if (titleMentionsAssignee(shortTitle)) {
+            errors.title =
+                'Do not mention who the complaint is assigned to in the title';
+        } else if (titleMentionsStatus(shortTitle)) {
+            errors.title = 'Do not mention the complaint status in the title';
         }
         if (!description.trim()) {
             errors.description = 'Complaint description is required';
@@ -213,25 +280,28 @@ export function RegisterComplaintPage() {
             errors.undertaking =
                 'You must confirm the undertaking before submitting';
         }
-        if (complaintType === 'group' && visibility === 'private') {
-            errors.visibility =
-                'Private complaints must be solo. Group complaints must be public.';
-        }
-
-        const invites = parseInviteUrns();
-        const selfUrn =
-            profile?.rollNumber?.toLowerCase() ||
-            profile?.loginIdentifier?.toLowerCase();
-        if (complaintType === 'group' && invites.length > 0) {
-            const dup = invites.find(
-                (u) => u.toLowerCase() === selfUrn
-            );
-            if (dup) {
-                errors.invites = 'You cannot invite yourself';
-            }
-        }
 
         setFieldErrors(errors);
+        const order = [
+            'categoryId',
+            'department',
+            'title',
+            'description',
+            'visibility',
+            'undertaking'
+        ];
+        const first = order.find((key) => errors[key]);
+        if (first) {
+            requestAnimationFrame(() => {
+                const el = document.querySelector(`[data-field="${first}"]`);
+                if (!el) return;
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                const focusable = el.querySelector(
+                    'input, select, textarea, button'
+                );
+                focusable?.focus?.();
+            });
+        }
         return Object.keys(errors).length === 0;
     };
 
@@ -258,10 +328,11 @@ export function RegisterComplaintPage() {
                 continue;
             }
             next.push({
-                id: `${file.name}-${file.size}-${Date.now()}`,
+                id: `${file.name}-${file.size}-${Date.now()}-${next.length}`,
                 name: file.name,
                 size: file.size,
-                file
+                file,
+                url: URL.createObjectURL(file)
             });
         }
         setImageFiles(next.slice(0, MAX_IMAGE_FILES));
@@ -273,7 +344,12 @@ export function RegisterComplaintPage() {
     };
 
     const removeImage = (id) => {
-        setImageFiles((prev) => prev.filter((f) => f.id !== id));
+        setImageFiles((prev) => {
+            const target = prev.find((item) => item.id === id);
+            if (target?.url) URL.revokeObjectURL(target.url);
+            return prev.filter((item) => item.id !== id);
+        });
+        setPreview((current) => (current?.id === id ? null : current));
     };
 
     const handleCancel = () => {
@@ -301,40 +377,54 @@ export function RegisterComplaintPage() {
         try {
             const images = [];
             for (const item of imageFiles) {
-                const dataUrl = await readFileAsDataUrl(item.file);
+                const prepared = await compressImageFile(item.file);
+                const dataUrl = await readFileAsDataUrl(prepared);
                 images.push(dataUrl);
             }
 
             const payload = {
                 categoryId,
                 department,
-                title: title.trim(),
+                title: toShortTitle(title),
                 description: description.trim(),
                 location: location.trim() || undefined,
-                priority,
-                complaintType,
+                complaintType: 'solo',
                 visibility,
                 undertaking: true,
                 images: images.length ? images : undefined
             };
 
-            if (complaintType === 'group') {
-                const inviteUrns = parseInviteUrns();
-                if (inviteUrns.length) {
-                    payload.inviteUrns = inviteUrns;
-                }
-            }
-
             const data = await complaintsApi.create(payload);
             const complaint = data.complaint;
             setSuccess({
                 id: complaint?._id,
+                publicId: complaint?.publicId || '',
                 message: data.message || 'Complaint submitted successfully'
             });
         } catch (err) {
-            setFormError(
-                err.message || 'Failed to submit complaint. Please try again.'
-            );
+            const message =
+                err.message || 'Failed to submit complaint. Please try again.';
+            setFormError(message);
+            const lower = message.toLowerCase();
+            const field = lower.includes('department')
+                ? 'department'
+                : lower.includes('category')
+                  ? 'categoryId'
+                  : lower.includes('title')
+                    ? 'title'
+                    : lower.includes('description')
+                      ? 'description'
+                      : null;
+            if (field) {
+                requestAnimationFrame(() => {
+                    document
+                        .querySelector(`[data-field="${field}"]`)
+                        ?.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'center'
+                        });
+                });
+            }
         } finally {
             setSubmitting(false);
         }
@@ -347,8 +437,7 @@ export function RegisterComplaintPage() {
                     <h1>Complaint submitted</h1>
                     <p>{success.message}</p>
                     <p className="mono">
-                        Reference:{' '}
-                        {String(success.id).slice(-8).toUpperCase()}
+                        Reference: {success.publicId || '—'}
                     </p>
                     <div className="form-actions">
                         <Link
@@ -404,6 +493,85 @@ export function RegisterComplaintPage() {
                     <section className="cr-form-card">
                         <h2 className="cr-form-card__title">
                             <span className="cr-form-card__title-icon">
+                                <AppIcon name="user" size="md" />
+                            </span>
+                            Your details
+                        </h2>
+                        <p className="field-hint">
+                            Pre-filled from your account. Identity fields cannot
+                            be changed here.
+                        </p>
+                        <div className="cr-form-row cr-form-row--2">
+                            <div className="cr-field">
+                                <span className="cr-field__label">Full name</span>
+                                <input
+                                    className="ui-input"
+                                    type="text"
+                                    value={profile?.name || ''}
+                                    readOnly
+                                    disabled
+                                />
+                            </div>
+                            <div className="cr-field">
+                                <span className="cr-field__label">URN / Roll</span>
+                                <input
+                                    className="ui-input"
+                                    type="text"
+                                    value={profile?.rollNumber || ''}
+                                    readOnly
+                                    disabled
+                                />
+                            </div>
+                            <div className="cr-field">
+                                <span className="cr-field__label">Department</span>
+                                <input
+                                    className="ui-input"
+                                    type="text"
+                                    value={profile?.department || ''}
+                                    readOnly
+                                    disabled
+                                />
+                            </div>
+                            <div className="cr-field">
+                                <span className="cr-field__label">Semester</span>
+                                <input
+                                    className="ui-input"
+                                    type="text"
+                                    value={
+                                        profile?.semester != null
+                                            ? String(profile.semester)
+                                            : ''
+                                    }
+                                    readOnly
+                                    disabled
+                                />
+                            </div>
+                            <div className="cr-field">
+                                <span className="cr-field__label">Email</span>
+                                <input
+                                    className="ui-input"
+                                    type="email"
+                                    value={profile?.email || ''}
+                                    readOnly
+                                    disabled
+                                />
+                            </div>
+                            <div className="cr-field">
+                                <span className="cr-field__label">Phone</span>
+                                <input
+                                    className="ui-input"
+                                    type="tel"
+                                    value={profile?.phone || 'Not provided'}
+                                    readOnly
+                                    disabled
+                                />
+                            </div>
+                        </div>
+                    </section>
+
+                    <section className="cr-form-card">
+                        <h2 className="cr-form-card__title">
+                            <span className="cr-form-card__title-icon">
                                 <AppIcon name="file-text" size="md" />
                             </span>
                             Complaint Details
@@ -416,7 +584,7 @@ export function RegisterComplaintPage() {
                         ) : null}
 
                         <div className="cr-form-row cr-form-row--2">
-                            <div className="cr-field">
+                            <div className="cr-field" data-field="categoryId">
                                 <span className="cr-field__label">
                                     Complaint Category *
                                 </span>
@@ -454,7 +622,7 @@ export function RegisterComplaintPage() {
                                 <FieldError message={fieldErrors.categoryId} />
                             </div>
 
-                            <div className="cr-field">
+                            <div className="cr-field" data-field="department">
                                 <span className="cr-field__label">
                                     Related Department *
                                 </span>
@@ -536,7 +704,7 @@ export function RegisterComplaintPage() {
                             </div>
                         </div>
 
-                        <div className="cr-field">
+                        <div className="cr-field" data-field="title">
                             <span className="cr-field__label">
                                 Complaint Title *
                             </span>
@@ -548,23 +716,24 @@ export function RegisterComplaintPage() {
                                 <input
                                     type="text"
                                     className="ui-input-group__field"
-                                    placeholder="Enter a short and clear title"
+                                    placeholder="A few words on one line"
                                     value={title}
                                     maxLength={MAX_TITLE}
                                     onChange={(e) =>
-                                        setTitle(e.target.value)
+                                        setTitle(
+                                            e.target.value
+                                                .replace(/[\r\n\t]+/g, ' ')
+                                                .slice(0, MAX_TITLE)
+                                        )
                                     }
                                     disabled={submitting}
                                     aria-invalid={Boolean(fieldErrors.title)}
                                 />
                             </InputGroup>
-                            <span className="cr-field__counter">
-                                {title.length}/{MAX_TITLE}
-                            </span>
                             <FieldError message={fieldErrors.title} />
                         </div>
 
-                        <div className="cr-field">
+                        <div className="cr-field" data-field="description">
                             <span className="cr-field__label">
                                 Complaint Description *
                             </span>
@@ -597,60 +766,24 @@ export function RegisterComplaintPage() {
                             <FieldError message={fieldErrors.description} />
                         </div>
 
-                        <div className="cr-form-row cr-form-row--2">
-                            <div className="cr-field">
-                                <span className="cr-field__label">
-                                    Location (Optional)
-                                </span>
-                                <InputGroup
-                                    icon={
-                                        <AppIcon name="map-pin" size="sm" />
+                        <div className="cr-field">
+                            <span className="cr-field__label">
+                                Location (Optional)
+                            </span>
+                            <InputGroup
+                                icon={<AppIcon name="map-pin" size="sm" />}
+                            >
+                                <input
+                                    type="text"
+                                    className="ui-input-group__field"
+                                    placeholder="Building, Room No., Area..."
+                                    value={location}
+                                    onChange={(e) =>
+                                        setLocation(e.target.value)
                                     }
-                                >
-                                    <input
-                                        type="text"
-                                        className="ui-input-group__field"
-                                        placeholder="Building, Room No., Area..."
-                                        value={location}
-                                        onChange={(e) =>
-                                            setLocation(e.target.value)
-                                        }
-                                        disabled={submitting}
-                                    />
-                                </InputGroup>
-                            </div>
-
-                            <div className="cr-field">
-                                <span className="cr-field__label">
-                                    Priority Level *
-                                </span>
-                                <div className="cr-priority-wrap">
-                                    <InputGroup noIcon>
-                                        <select
-                                            className="ui-input-group__field"
-                                            value={priority}
-                                            onChange={(e) =>
-                                                setPriority(e.target.value)
-                                            }
-                                            disabled={submitting}
-                                        >
-                                            {PRIORITIES.map((p) => (
-                                                <option
-                                                    key={p.value}
-                                                    value={p.value}
-                                                >
-                                                    {p.label}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </InputGroup>
-                                    {priority === 'medium' ? (
-                                        <span className="cr-priority-badge">
-                                            Medium
-                                        </span>
-                                    ) : null}
-                                </div>
-                            </div>
+                                    disabled={submitting}
+                                />
+                            </InputGroup>
                         </div>
 
                         <div className="cr-field">
@@ -703,7 +836,16 @@ export function RegisterComplaintPage() {
                                 <ul className="file-list">
                                     {imageFiles.map((f) => (
                                         <li key={f.id}>
-                                            <span>
+                                            <button
+                                                type="button"
+                                                className="file-list__thumb"
+                                                onClick={() => setPreview(f)}
+                                                disabled={submitting}
+                                                aria-label={`Preview ${f.name}`}
+                                            >
+                                                <img src={f.url} alt="" />
+                                            </button>
+                                            <span className="file-list__name">
                                                 {f.name} ({formatBytes(f.size)})
                                             </span>
                                             <button
@@ -719,105 +861,47 @@ export function RegisterComplaintPage() {
                                     ))}
                                 </ul>
                             ) : null}
+                            <ImagePreview
+                                file={
+                                    preview
+                                        ? { url: preview.url, filename: preview.name }
+                                        : null
+                                }
+                                onClose={() => setPreview(null)}
+                            />
                         </div>
 
-                        <details className="cr-advanced">
-                            <summary>
-                                Additional options (group / visibility)
-                            </summary>
-                            <div className="cr-advanced__body">
-                                <fieldset className="form-field">
-                                    <legend>Complaint Type</legend>
-                                    <label className="radio-inline">
-                                        <input
-                                            type="radio"
-                                            name="complaintType"
-                                            value="solo"
-                                            checked={
-                                                complaintType === 'solo'
-                                            }
-                                            onChange={() =>
-                                                setComplaintType('solo')
-                                            }
-                                            disabled={submitting}
-                                        />
-                                        Solo
-                                    </label>
-                                    <label className="radio-inline">
-                                        <input
-                                            type="radio"
-                                            name="complaintType"
-                                            value="group"
-                                            checked={
-                                                complaintType === 'group'
-                                            }
-                                            onChange={() =>
-                                                setComplaintType('group')
-                                            }
-                                            disabled={submitting}
-                                        />
-                                        Group
-                                    </label>
-                                </fieldset>
-                                {complaintType === 'group' ? (
-                                    <label className="form-field">
-                                        Invite participants (URNs)
-                                        <textarea
-                                            rows={2}
-                                            value={inviteInput}
-                                            onChange={(e) =>
-                                                setInviteInput(e.target.value)
-                                            }
-                                            disabled={submitting}
-                                        />
-                                        <FieldError
-                                            message={fieldErrors.invites}
-                                        />
-                                    </label>
-                                ) : null}
-                                <fieldset className="form-field">
-                                    <legend>Visibility</legend>
-                                    <label className="radio-inline">
-                                        <input
-                                            type="radio"
-                                            name="visibility"
-                                            value="public"
-                                            checked={
-                                                visibility === 'public'
-                                            }
-                                            onChange={() =>
-                                                setVisibility('public')
-                                            }
-                                            disabled={submitting}
-                                        />
-                                        Public
-                                    </label>
-                                    <label className="radio-inline">
-                                        <input
-                                            type="radio"
-                                            name="visibility"
-                                            value="private"
-                                            checked={
-                                                visibility === 'private'
-                                            }
-                                            onChange={() =>
-                                                setVisibility('private')
-                                            }
-                                            disabled={
-                                                submitting ||
-                                                complaintType === 'group'
-                                            }
-                                        />
-                                        Private (solo only)
-                                    </label>
-                                    <FieldError
-                                        message={fieldErrors.visibility}
-                                    />
-                                </fieldset>
-                            </div>
-                        </details>
+                        <fieldset className="form-field cr-access" data-field="visibility">
+                            <legend>Visibility</legend>
+                            <label className="radio-inline">
+                                <input
+                                    type="radio"
+                                    name="visibility"
+                                    value="public"
+                                    checked={visibility === 'public'}
+                                    onChange={() => chooseVisibility('public')}
+                                    disabled={submitting}
+                                />
+                                Public
+                            </label>
+                            <label className="radio-inline">
+                                <input
+                                    type="radio"
+                                    name="visibility"
+                                    value="private"
+                                    checked={visibility === 'private'}
+                                    onChange={() => chooseVisibility('private')}
+                                    disabled={submitting}
+                                />
+                                Private
+                            </label>
+                            <p className="cr-access-note">
+                                Other students can join a public complaint after it is submitted.
+                            </p>
+                            <FieldError message={fieldErrors.visibility} />
+                        </fieldset>
 
-                        <label className="checkbox-field">
+                        <label className="checkbox-field" data-field="undertaking">
                             <input
                                 type="checkbox"
                                 checked={undertaking}

@@ -2,7 +2,7 @@ import User from '../models/userModel.js';
 import ComplaintLog from '../models/complaintLogs.js';
 import { getDepartmentHodLookupCandidates } from '../constants/complaintDepartments.js';
 
-export const TERMINAL_STATUSES = ['resolved', 'rejected'];
+export const TERMINAL_STATUSES = ['resolved', 'rejected', 'withdrawn'];
 
 export const normalizeStatus = (status) =>
     status === 'pending' ? 'submitted' : status;

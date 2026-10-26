@@ -20,7 +20,10 @@ export function getPortalNavSections(user) {
                         label: 'Register Complaint'
                     },
                     { to: '/student/complaints', label: 'My Complaints' },
-                    { to: '/student/track', label: 'Track Status' },
+                    {
+                        to: '/student/all-complaints',
+                        label: 'All Complaints'
+                    },
                     { to: '/app/profile', label: 'My Profile' },
                     { to: '/student/support', label: 'Support' }
                 ]

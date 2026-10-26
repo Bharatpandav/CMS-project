@@ -35,6 +35,172 @@
     gap: 1rem;
 }
 
+.public-header__actions {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-left: auto;
+    position: relative;
+}
+
+.public-header__icon-btn {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-pill);
+    background: #fff;
+    color: var(--public-navy);
+    cursor: pointer;
+}
+
+.public-header__icon-btn:hover,
+.public-header__icon-btn:focus-visible {
+    background: var(--color-tertiary);
+    outline: none;
+    box-shadow: var(--focus-ring);
+}
+
+.public-header__badge {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: 999px;
+    background: var(--brand-blue);
+    color: #fff;
+    font-size: 0.65rem;
+    font-weight: 700;
+    line-height: 16px;
+    text-align: center;
+}
+
+.public-header__auth-btn {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.btn--with-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+}
+
+.public-notifications {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    right: 0;
+    width: min(320px, 92vw);
+    max-height: 360px;
+    overflow: auto;
+    background: #fff;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-card);
+    z-index: 40;
+}
+
+.public-notifications__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.public-notifications__empty {
+    padding: 1rem;
+    color: var(--color-text-muted);
+    margin: 0;
+}
+
+.public-notifications__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.public-notifications__item {
+    width: 100%;
+    text-align: left;
+    border: none;
+    background: transparent;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--color-border);
+    cursor: pointer;
+    font: inherit;
+}
+
+.public-notifications__item--unread .public-notifications__title {
+    font-weight: 700;
+}
+
+.public-notifications__title {
+    display: block;
+    font-size: 0.9rem;
+}
+
+.public-notifications__msg {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    margin-top: 0.2rem;
+}
+
+.hero__actions--triple {
+    align-items: center;
+}
+
+.stats-strip--live {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    width: 100%;
+    max-width: var(--layout-max-width);
+    margin: 0 auto 2rem;
+    padding: 0 var(--layout-padding-x);
+}
+
+.stats-strip__status {
+    grid-column: 1 / -1;
+    text-align: center;
+    color: var(--color-text-muted);
+}
+
+.stats-strip__status--error button {
+    margin-left: 0.5rem;
+}
+
+.login-modal__forgot {
+    align-self: flex-start;
+    border: none;
+    background: none;
+    padding: 0;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.9rem;
+}
+
+.complainant-contact__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.profile-contact-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 0 1.25rem 1.25rem;
+}
+
 .public-brand {
     display: flex;
     align-items: center;
@@ -79,7 +245,7 @@
     display: flex;
     align-items: center;
     gap: 0.35rem;
-    margin-left: auto;
+    margin-left: 0.35rem;
 }
 
 .public-nav button {
@@ -140,6 +306,12 @@
     gap: 0.75rem;
 }
 
+.hero__actions .btn {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+}
+
 .btn {
     border-radius: var(--radius-pill);
     padding: 0.65rem 1.15rem;
@@ -170,33 +342,66 @@
 }
 
 .btn--outline {
-    background: #fff;
+    background: #f0f5fb;
     color: var(--public-navy);
-    border-color: #cbd5e1;
+    border: 1px solid #94a3b8;
+    box-shadow:
+        0 1px 2px rgba(15, 39, 68, 0.08),
+        0 0 0 1px rgba(15, 39, 68, 0.04);
 }
 
 .btn--outline:hover {
-    background: #f8fafc;
+    background: #dce8f5;
+    border-color: var(--public-navy);
+    box-shadow:
+        0 3px 10px rgba(15, 39, 68, 0.14),
+        0 0 0 1px rgba(15, 39, 68, 0.08);
 }
 
 .btn--admin {
-    background: #fff;
+    background: #e8eef5;
     color: var(--public-navy);
     border: 1px solid var(--public-navy);
     text-decoration: none;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    box-shadow:
+        0 1px 2px rgba(15, 39, 68, 0.1),
+        0 0 0 1px rgba(15, 39, 68, 0.06);
 }
 
 .btn--admin:hover {
-    background: #e8eef5;
+    background: #cdd9ea;
+    border-color: var(--public-navy);
+    box-shadow:
+        0 3px 10px rgba(15, 39, 68, 0.16),
+        0 0 0 1px rgba(15, 39, 68, 0.1);
+}
+
+/* Hero CTAs: stay distinct from patterned section background */
+.hero__actions .btn--outline {
+    background: #eef4fc;
+    border-color: #64748b;
+}
+
+.hero__actions .btn--outline:hover {
+    background: #d4e3f4;
+}
+
+.hero__actions .btn--admin {
+    background: #dfe9f5;
+    border-width: 2px;
+}
+
+.hero__actions .btn--admin:hover {
+    background: #c5d6eb;
 }
 
 .public-header__admin {
     border: 1px solid var(--public-navy) !important;
     color: var(--public-navy) !important;
-    background: #fff !important;
+    background: #e8eef5 !important;
     font-weight: 600;
     text-decoration: none;
     padding: 0.45rem 0.7rem;
@@ -704,10 +909,106 @@
         flex-wrap: wrap;
     }
 
+    .public-header__actions {
+        order: 2;
+        margin-left: auto;
+    }
+
+    .public-nav-toggle {
+        order: 3;
+    }
+
+    .public-nav {
+        order: 4;
+        width: 100%;
+    }
+
+    .hero__actions--triple .btn {
+        flex: 1 1 100%;
+    }
+
     .features__grid,
     .stats-strip,
     .how-steps {
         grid-template-columns: 1fr;
+    }
+}
+
+/*
+ * Hero CTA reflection (home.css loads after button-reflection.css on this page).
+ * Light buttons need a higher-contrast streak than the primary blue button.
+ */
+.hero__actions .btn:not(:disabled)::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateX(-160%) skewX(-14deg);
+    background: linear-gradient(
+        105deg,
+        transparent 0%,
+        transparent 34%,
+        rgba(255, 255, 255, 0.25) 42%,
+        rgba(255, 255, 255, 0.65) 50%,
+        rgba(255, 255, 255, 0.25) 58%,
+        transparent 66%,
+        transparent 100%
+    );
+}
+
+.hero__actions .btn.btn--primary:not(:disabled)::before {
+    background: linear-gradient(
+        105deg,
+        transparent 0%,
+        transparent 34%,
+        rgba(255, 255, 255, 0.35) 42%,
+        rgba(255, 255, 255, 0.75) 50%,
+        rgba(255, 255, 255, 0.35) 58%,
+        transparent 66%,
+        transparent 100%
+    );
+}
+
+.hero__actions .btn.btn--admin:not(:disabled)::before,
+.hero__actions .btn.btn--outline:not(:disabled)::before {
+    background: linear-gradient(
+        105deg,
+        transparent 0%,
+        transparent 30%,
+        rgba(37, 99, 235, 0.18) 40%,
+        rgba(255, 255, 255, 0.92) 48%,
+        rgba(255, 255, 255, 0.98) 50%,
+        rgba(255, 255, 255, 0.92) 52%,
+        rgba(37, 99, 235, 0.18) 60%,
+        transparent 70%,
+        transparent 100%
+    );
+}
+
+.hero__actions .btn:not(:disabled) > * {
+    position: relative;
+    z-index: 2;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .hero__actions .btn:not(:disabled):hover::before {
+        opacity: 1;
+        animation: cms-btn-reflect-sweep 0.58s ease;
+    }
+}
+
+.hero__actions .btn:not(:disabled):focus-visible::before {
+    opacity: 1;
+    animation: cms-btn-reflect-sweep 0.58s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .hero__actions .btn:not(:disabled):focus-visible::before {
+        animation: none;
+        opacity: 0;
     }
 }
 
@@ -719,5 +1020,10 @@
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
         scroll-behavior: auto !important;
+    }
+
+    .hero__actions .btn::before {
+        display: none !important;
+        animation: none !important;
     }
 }

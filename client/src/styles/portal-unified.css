@@ -262,6 +262,8 @@
 }
 
 .portal-sidebar__logout {
+    position: relative;
+    overflow: hidden;
     margin-top: 0.5rem;
     width: 100%;
     border: 1px solid var(--border, #e2e8f0);

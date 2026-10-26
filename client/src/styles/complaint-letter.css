@@ -1,0 +1,318 @@
+.letter-screen {
+    min-height: 100vh;
+    background: #e7edf5;
+    color: #0f2744;
+    padding: 1.25rem 1rem 2rem;
+}
+
+.letter-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.6rem;
+    width: min(210mm, 100%);
+    margin: 0 auto 0.85rem;
+}
+
+.letter-toolbar button,
+.letter-status button {
+    min-height: 40px;
+    padding: 0.45rem 0.9rem;
+    border-radius: 10px;
+    border: 1px solid #c5d3e4;
+    background: #fff;
+    color: #0f2744;
+    font: inherit;
+    font-weight: 650;
+    cursor: pointer;
+}
+
+.letter-toolbar button:last-child {
+    background: #1d4f91;
+    border-color: #1d4f91;
+    color: #fff;
+}
+
+.letter-status {
+    max-width: 32rem;
+    margin: 3rem auto;
+    padding: 1.25rem;
+    background: #fff;
+    border-radius: 12px;
+    color: #0f2744;
+}
+
+.letter-sheet {
+    width: min(210mm, 100%);
+    height: 297mm;
+    max-height: 297mm;
+    margin: 0 auto;
+    padding: 8mm 10mm;
+    overflow: hidden;
+    background: #fff;
+    color: #16324f;
+    border: 1px solid #d5e0ee;
+    box-shadow: 0 16px 40px rgba(15, 39, 68, 0.12);
+    box-sizing: border-box;
+    font-size: 9pt;
+    line-height: 1.3;
+}
+
+.letter-head {
+    padding-bottom: 0.35rem;
+    border-bottom: 1.5px solid #1d4f91;
+}
+
+.letter-mark {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    background: #0f2744;
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+
+.letter-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+}
+
+.letter-brand strong,
+.letter-brand span {
+    display: block;
+}
+
+.letter-brand strong {
+    font-size: 0.95rem;
+    color: #0f2744;
+}
+
+.letter-brand span {
+    color: #5b6b7c;
+    font-size: 0.85rem;
+}
+
+.letter-sheet h1 {
+    margin: 0.45rem 0 0;
+    text-align: center;
+    font-size: 1.05rem;
+    letter-spacing: 0.08em;
+    color: #0f2744;
+}
+
+.letter-subtitle {
+    margin: 0 0 0.45rem;
+    text-align: center;
+    color: #5b6b7c;
+    font-size: 0.78rem;
+    font-style: italic;
+}
+
+.letter-meta {
+    display: flex;
+    justify-content: flex-end;
+    gap: 1rem;
+    margin: 0 0 0.4rem;
+}
+
+.letter-meta p {
+    margin: 0;
+    text-align: right;
+}
+
+.letter-meta span,
+.letter-to > span,
+.letter-muted {
+    display: block;
+    color: #5b6b7c;
+    font-size: 0.82rem;
+}
+
+.letter-to {
+    margin-bottom: 0.4rem;
+}
+
+.letter-subject {
+    margin: 0 0 0.4rem;
+    padding: 0.3rem 0.55rem;
+    background: #f3f7fc;
+    border: 1px solid #d5e2f0;
+    border-radius: 6px;
+    font-weight: 700;
+    color: #0f2744;
+}
+
+.letter-greeting,
+.letter-intro {
+    margin: 0 0 0.3rem;
+}
+
+.letter-sheet h2 {
+    margin: 0.45rem 0 0.25rem;
+    padding-bottom: 0.1rem;
+    border-bottom: 1px solid #d5e2f0;
+    color: #1d4f91;
+    font-size: 0.9rem;
+}
+
+.letter-to strong {
+    display: block;
+    font-weight: 650;
+    line-height: 1.25;
+}
+
+.letter-sheet table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.letter-sheet p {
+    margin: 0 0 0.25rem;
+}
+
+.letter-sheet th,
+.letter-sheet td {
+    padding: 0.18rem 0.4rem;
+    border: 1px solid #d5e2f0;
+    vertical-align: top;
+    text-align: left;
+    overflow-wrap: anywhere;
+    font-size: 8pt;
+    line-height: 1.25;
+}
+
+.letter-sheet th {
+    width: 18%;
+    background: #f7fafc;
+    color: #3d5166;
+    font-weight: 650;
+}
+
+.letter-description {
+    display: -webkit-box;
+    margin: 0;
+    max-height: 4.6em;
+    overflow: hidden;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
+}
+
+.letter-files {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.4rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.letter-preview-btn {
+    display: block;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+    cursor: zoom-in;
+}
+
+.letter-files img {
+    display: block;
+    width: 100%;
+    height: 36px;
+    object-fit: cover;
+    border: 1px solid #d5e2f0;
+    border-radius: 4px;
+    background: #f7fafc;
+}
+
+.letter-files span {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 8pt;
+}
+
+.letter-members {
+    margin: 0;
+    color: #5b6b7c;
+    font-size: 8pt;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.letter-signoff {
+    margin: 0.35rem 0 0;
+}
+
+.letter-signature {
+    height: 0.7rem;
+}
+
+.letter-name {
+    margin: 0;
+    font-weight: 700;
+    color: #0f2744;
+}
+
+.letter-identity {
+    margin: 0.2rem 0 0;
+    padding: 0;
+    list-style: none;
+    color: #3d5166;
+}
+
+@page {
+    size: A4 portrait;
+    margin: 0;
+}
+
+@media print {
+    .letter-screen {
+        background: #fff;
+        padding: 0;
+    }
+
+    .letter-toolbar,
+    .letter-status button {
+        display: none !important;
+    }
+
+    .letter-sheet {
+        width: 210mm;
+        height: 297mm;
+        max-height: 297mm;
+        margin: 0;
+        padding: 8mm 10mm;
+        overflow: hidden;
+        border: none;
+        box-shadow: none;
+        page-break-after: avoid;
+        break-after: avoid;
+    }
+}
+
+@media (max-width: 720px) {
+    .letter-files {
+        grid-template-columns: 1fr;
+    }
+
+    .letter-meta {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .letter-meta p {
+        text-align: left;
+    }
+}

@@ -6,14 +6,8 @@ const STATUS_LABELS = {
     rejected: 'Rejected',
     resolved: 'Resolved',
     escalated: 'Escalated',
-    reopened: 'Reopened'
-};
-
-const PRIORITY_LABELS = {
-    low: 'Low',
-    medium: 'Medium',
-    high: 'High',
-    urgent: 'Urgent'
+    reopened: 'Reopened',
+    withdrawn: 'Withdrawn'
 };
 
 export function StatusBadge({ status }) {
@@ -24,17 +18,6 @@ export function StatusBadge({ status }) {
     return (
         <span className={`badge badge--status badge--status-${safeKey}`}>
             {label}
-        </span>
-    );
-}
-
-export function PriorityBadge({ priority }) {
-    const key = (priority || 'medium').toLowerCase();
-    const safeKey = PRIORITY_LABELS[key] ? key : 'medium';
-
-    return (
-        <span className={`badge badge--priority badge--priority-${safeKey}`}>
-            {PRIORITY_LABELS[safeKey]}
         </span>
     );
 }

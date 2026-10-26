@@ -14,6 +14,7 @@
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.10.2",
     "multer": "^2.4.0",
+    "nodemailer": "^10.2.1",
     "nodemon": "^3.1.14",
     "validator": "^13.15.35"
   },
@@ -23,6 +24,9 @@
     "seed:users": "node scripts/seedUsers.js",
     "seed:dev": "node scripts/seedDevTestData.js",
     "seed:fresh": "node scripts/seedFreshTestPack.js",
-    "verify:dev": "node scripts/verifyDevCredentials.js"
+    "verify:dev": "node scripts/verifyDevCredentials.js",
+    "backfill:complaint-ids": "node scripts/backfillComplaintPublicIds.js",
+    "test:complaint-ids": "node scripts/testComplaintPublicIds.js",
+    "test:complaint-access": "node scripts/testComplaintAccess.js"
   }
 }

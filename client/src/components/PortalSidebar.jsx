@@ -1,19 +1,46 @@
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { AppIcon } from './AppIcon.jsx';
 import { getPortalNavSections } from '../config/roleNavigation.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { getNavIconKey } from '../utils/navIcons.js';
 
-function NavLinkItem({ to, label, end, onNavigate }) {
+function isPortalItemActive(pathname, to) {
+    if (to === '/student/complaints/register') {
+        return pathname === '/student/complaints/register';
+    }
+    if (to === '/student/complaints') {
+        if (pathname === '/student/complaints') return true;
+        return /^\/student\/complaints\/(?!register(?:\/|$))[^/]+/.test(
+            pathname
+        );
+    }
+    if (to === '/student/all-complaints') {
+        return pathname === '/student/all-complaints';
+    }
+    if (to === '/complaints') {
+        if (pathname === '/complaints') return true;
+        return /^\/complaints\/(?!categories(?:\/|$))[^/]+/.test(pathname);
+    }
+    if (pathname === to) return true;
+    if (to === '/app/dashboard' || to === '/management/dashboard') {
+        return pathname === to;
+    }
+    return pathname.startsWith(`${to}/`);
+}
+
+function NavLinkItem({ to, label, onNavigate }) {
     const iconKey = getNavIconKey(label);
+    const { pathname } = useLocation();
+    const active = isPortalItemActive(pathname, to);
     return (
         <NavLink
             to={to}
-            end={end}
+            end
             onClick={onNavigate}
-            className={({ isActive }) =>
-                `portal-nav-link${isActive ? ' portal-nav-link--active' : ''}`
+            className={() =>
+                `portal-nav-link${active ? ' portal-nav-link--active' : ''}`
             }
+            aria-current={active ? 'page' : undefined}
         >
             <span className="portal-nav-link__icon" aria-hidden="true">
                 <AppIcon name={iconKey} size="md" />
@@ -53,7 +80,6 @@ export function PortalSidebar({ variant = 'desktop', mobileOpen, onClose }) {
                                 key={item.to + item.label}
                                 to={item.to}
                                 label={item.label}
-                                end={item.end}
                                 onNavigate={closeMobile}
                             />
                         ))}
@@ -63,7 +89,7 @@ export function PortalSidebar({ variant = 'desktop', mobileOpen, onClose }) {
             <div className="portal-sidebar__footer">
                 <button
                     type="button"
-                    className="portal-sidebar__logout"
+                    className="portal-sidebar__logout cms-btn-reflect"
                     onClick={handleLogout}
                 >
                     <AppIcon name="logout" size="sm" />

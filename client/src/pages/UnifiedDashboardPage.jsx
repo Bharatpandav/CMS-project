@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { SummaryCard } from '../components/SummaryCard.jsx';
 import { RecentComplaintsTable } from '../components/RecentComplaintsTable.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
-import { useComplaintsData, useCategoriesData } from '../hooks/useComplaintsData.js';
+import { useComplaintsData } from '../hooks/useComplaintsData.js';
 import { managementApi } from '../api/client.js';
 import { canAccessManagementPortal } from '../utils/managementAccess.js';
 import {
@@ -50,9 +50,9 @@ function buildQuickActions(role) {
                 tone: 'neutral'
             },
             {
-                title: 'Track Status',
-                text: 'Stay updated on the progress of your complaint.',
-                to: '/student/complaints',
+                title: 'All Complaints',
+                text: 'Browse the latest public complaints across the university.',
+                to: '/student/all-complaints',
                 iconKey: 'activity',
                 tone: 'neutral'
             },
@@ -130,7 +130,17 @@ export function UnifiedDashboardPage() {
         myComplaints: isStudent
     });
 
-    const { departments, loading: deptLoading } = useCategoriesData();
+    const {
+        complaints: publicComplaints,
+        loading: publicLoading,
+        error: publicError,
+        reload: reloadPublic
+    } = useComplaintsData({
+        limit: 8,
+        publicFeed: isStudent,
+        myComplaints: isStudent ? undefined : true
+    });
+
     const { stats: userStats, error: userStatsError } =
         useManagementStats(showMgmtStats);
 
@@ -221,19 +231,6 @@ export function UnifiedDashboardPage() {
                 />
             </section>
 
-            <section
-                className="summary-grid summary-grid--compact"
-                aria-label="Directory metrics"
-            >
-                <SummaryCard
-                    accent="teal"
-                    label="Service departments"
-                    value={deptLoading ? '…' : String(departments.length)}
-                    hint="Categories available for routing complaints"
-                    icon={<AppIcon name="building" />}
-                />
-            </section>
-
             {!isStudent && role !== 'advisor' ? (
                 <section className="summary-grid summary-grid--compact">
                     <SummaryCard
@@ -271,17 +268,34 @@ export function UnifiedDashboardPage() {
             <article className="panel panel--table">
                 <div className="panel__header">
                     <h2>Recent complaints</h2>
-                    <Link to={listPath} className="link-teal">
+                    <Link
+                        to={
+                            isStudent
+                                ? '/student/all-complaints'
+                                : listPath
+                        }
+                        className="link-teal"
+                    >
                         View all
                     </Link>
                 </div>
-                {loading ? (
+                {publicError ? (
+                    <div className="inline-alert">
+                        <span>{publicError}</span>
+                        <button type="button" onClick={reloadPublic}>
+                            Retry
+                        </button>
+                    </div>
+                ) : null}
+                {publicLoading ? (
                     <p className="panel__loading">Loading complaints…</p>
                 ) : (
                     <RecentComplaintsTable
-                        complaints={complaints.slice(0, 10)}
+                        complaints={publicComplaints.slice(0, 8)}
                         showViewAll={false}
-                        viewAllPath={listPath}
+                        complaintDetailBase={
+                            isStudent ? '/student/complaints' : undefined
+                        }
                     />
                 )}
             </article>

@@ -78,10 +78,42 @@ export async function apiRequest(path, options = {}) {
 
 export const authApi = {
     getMe: () => apiRequest('/api/user/me'),
-    login: (identifier, password) =>
+    login: (identifier, password, loginChannel) =>
         apiRequest('/api/user/login', {
             method: 'POST',
-            body: JSON.stringify({ identifier, password })
+            body: JSON.stringify({
+                identifier,
+                password,
+                ...(loginChannel ? { loginChannel } : {})
+            })
+        }),
+    forgotPassword: (email) =>
+        apiRequest('/api/user/forgot-password', {
+            method: 'POST',
+            body: JSON.stringify({ email })
+        }),
+    resetPassword: (token, newPassword) =>
+        apiRequest('/api/user/reset-password', {
+            method: 'POST',
+            body: JSON.stringify({ token, newPassword })
+        }),
+    updateProfile: (payload) =>
+        apiRequest('/api/user/me', {
+            method: 'PATCH',
+            body: JSON.stringify(payload)
+        }),
+    listNotifications: () => apiRequest('/api/user/notifications'),
+    dismissNotification: (id) =>
+        apiRequest(`/api/user/notifications/${id}`, {
+            method: 'DELETE'
+        }),
+    markNotificationRead: (id) =>
+        apiRequest(`/api/user/notifications/${id}/read`, {
+            method: 'PATCH'
+        }),
+    markAllNotificationsRead: () =>
+        apiRequest('/api/user/notifications/read-all', {
+            method: 'PATCH'
         }),
     logout: () =>
         apiRequest('/api/user/logout', { method: 'POST' }),
@@ -96,6 +128,7 @@ export const authApi = {
 };
 
 export const complaintsApi = {
+    getPublicStats: () => apiRequest('/api/complaints/public-stats'),
     getCategories: () => apiRequest('/api/complaints/categories'),
     getDepartments: () => apiRequest('/api/complaints/departments'),
     create: (payload) =>
@@ -110,6 +143,18 @@ export const complaintsApi = {
         );
     },
     getById: (id) => apiRequest(`/api/complaints/get/${id}`),
+    getContact: (id) => apiRequest(`/api/complaints/get/${id}/contact`),
+    addComment: (id, remarks) =>
+        apiRequest(`/api/complaints/get/${id}/comments`, {
+            method: 'POST',
+            body: JSON.stringify({ remarks })
+        }),
+    join: (id) =>
+        apiRequest(`/api/complaints/${id}/join`, { method: 'POST' }),
+    leave: (id) =>
+        apiRequest(`/api/complaints/${id}/leave`, { method: 'POST' }),
+    withdraw: (id) =>
+        apiRequest(`/api/complaints/${id}/withdraw`, { method: 'POST' }),
     updateStatus: (id, body) =>
         apiRequest(`/api/complaints/updateComplaintStatus/${id}`, {
             method: 'PUT',

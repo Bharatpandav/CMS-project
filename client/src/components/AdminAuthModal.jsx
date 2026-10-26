@@ -7,6 +7,8 @@ import { getPostLoginPath } from '../utils/roleRedirect.js';
 import { isAdminStaffRole } from '../utils/staffRoles.js';
 import { canAccessManagementPortal } from '../utils/managementAccess.js';
 import { getManagementPostLoginPath } from '../utils/managementAccess.js';
+import { validateEmail } from '../utils/emailValidation.js';
+import { ForgotPasswordDialog } from './ForgotPasswordDialog.jsx';
 
 function IconShield() {
     return (
@@ -29,6 +31,7 @@ export function AdminAuthModal({ open, onClose, initialMode = 'admin' }) {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [forgotOpen, setForgotOpen] = useState(false);
 
     const resetSensitive = () => {
         setPassword('');
@@ -75,13 +78,20 @@ export function AdminAuthModal({ open, onClose, initialMode = 'admin' }) {
     const submit = async (e) => {
         e.preventDefault();
         setError('');
-        if (!identifier.trim() || !password) {
-            setError('Email and password are required');
+        const emailCheck = validateEmail(identifier);
+        if (!emailCheck.ok) {
+            setError(emailCheck.message);
+            return;
+        }
+        if (!password) {
+            setError('Password is required');
             return;
         }
         setLoading(true);
         try {
-            const data = await login(identifier.trim(), password);
+            const data = await login(emailCheck.email, password, {
+                loginChannel: 'staff'
+            });
             const role = data.user?.role;
 
             if (role === 'student') {
@@ -173,10 +183,21 @@ export function AdminAuthModal({ open, onClose, initialMode = 'admin' }) {
                         autoComplete="current-password"
                         disabled={loading}
                     />
+                    <button
+                        type="button"
+                        className="login-modal__forgot link-teal"
+                        onClick={() => setForgotOpen(true)}
+                    >
+                        Forgot password?
+                    </button>
                     <button type="submit" className="login-modal__submit" disabled={loading}>
                         {loading ? 'Signing in…' : 'Login'}
                     </button>
                 </form>
+                <ForgotPasswordDialog
+                    open={forgotOpen}
+                    onClose={() => setForgotOpen(false)}
+                />
 
                 {!isManagement ? (
                     <div className="admin-auth-switch">

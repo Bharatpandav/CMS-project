@@ -1,0 +1,312 @@
+/**
+ * Global hover reflection / shimmer for interactive buttons site-wide.
+ */
+
+@keyframes cms-btn-reflect-sweep {
+    from {
+        transform: translateX(-160%) skewX(-14deg);
+    }
+    to {
+        transform: translateX(260%) skewX(-14deg);
+    }
+}
+
+/* Targets: native buttons + link-styled buttons */
+:root {
+    --cms-reflect-streak: linear-gradient(
+        105deg,
+        transparent 0%,
+        transparent 36%,
+        rgba(255, 255, 255, 0.2) 44%,
+        rgba(255, 255, 255, 0.55) 50%,
+        rgba(255, 255, 255, 0.2) 56%,
+        transparent 64%,
+        transparent 100%
+    );
+    --cms-reflect-streak-light-surface: linear-gradient(
+        105deg,
+        transparent 0%,
+        transparent 36%,
+        rgba(15, 39, 68, 0.06) 44%,
+        rgba(15, 39, 68, 0.22) 50%,
+        rgba(37, 99, 235, 0.12) 52%,
+        rgba(15, 39, 68, 0.06) 56%,
+        transparent 64%,
+        transparent 100%
+    );
+}
+
+.cms-btn-reflect:is(
+    button:not(:disabled):not([data-no-reflect]),
+    input[type='submit']:not(:disabled):not([data-no-reflect]),
+    input[type='button']:not(:disabled):not([data-no-reflect]),
+    input[type='reset']:not(:disabled):not([data-no-reflect]),
+    a:is(
+        .btn,
+        .ui-btn,
+        .btn-cancel,
+        .btn-secondary,
+        .btn--primary,
+        .btn--outline,
+        .btn--admin,
+        .btn--ghost,
+        .cr-submit-btn
+    )
+),
+button:not(:disabled):not([data-no-reflect]),
+input[type='submit']:not(:disabled):not([data-no-reflect]),
+input[type='button']:not(:disabled):not([data-no-reflect]),
+input[type='reset']:not(:disabled):not([data-no-reflect]),
+a:is(
+    .btn,
+    .ui-btn,
+    .btn-cancel,
+    .btn-secondary,
+    .btn--primary,
+    .btn--outline,
+    .btn--admin,
+    .btn--ghost,
+    .cr-submit-btn
+) {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+}
+
+.cms-btn-reflect:is(
+    button:not(:disabled):not([data-no-reflect]),
+    input[type='submit']:not(:disabled):not([data-no-reflect]),
+    input[type='button']:not(:disabled):not([data-no-reflect]),
+    input[type='reset']:not(:disabled):not([data-no-reflect]),
+    a:is(
+        .btn,
+        .ui-btn,
+        .btn-cancel,
+        .btn-secondary,
+        .btn--primary,
+        .btn--outline,
+        .btn--admin,
+        .btn--ghost,
+        .cr-submit-btn
+    )
+)::before,
+button:not(:disabled):not([data-no-reflect])::before,
+input[type='submit']:not(:disabled):not([data-no-reflect])::before,
+input[type='button']:not(:disabled):not([data-no-reflect])::before,
+input[type='reset']:not(:disabled):not([data-no-reflect])::before,
+a:is(
+    .btn,
+    .ui-btn,
+    .btn-cancel,
+    .btn-secondary,
+    .btn--primary,
+    .btn--outline,
+    .btn--admin,
+    .btn--ghost,
+    .cr-submit-btn
+)::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    z-index: 1;
+    opacity: 0;
+    background: var(--cms-reflect-streak);
+    mix-blend-mode: overlay;
+    transform: translateX(-160%) skewX(-14deg);
+}
+
+/* Light / outlined surfaces — visible streak on white & bordered buttons */
+button:is(
+    .btn--outline,
+    .btn--admin,
+    .btn--ghost,
+    .ui-btn--outline,
+    .ui-btn--secondary,
+    .btn-cancel,
+    .btn-secondary,
+    .public-header__admin
+)::before,
+a:is(.btn--outline, .btn--admin, .btn--ghost, .btn-cancel, .btn-secondary)::before {
+    background: linear-gradient(
+        105deg,
+        transparent 0%,
+        transparent 30%,
+        rgba(37, 99, 235, 0.16) 40%,
+        rgba(255, 255, 255, 0.88) 48%,
+        rgba(255, 255, 255, 0.98) 50%,
+        rgba(255, 255, 255, 0.88) 52%,
+        rgba(37, 99, 235, 0.16) 60%,
+        transparent 70%,
+        transparent 100%
+    );
+    mix-blend-mode: normal;
+    opacity: 0;
+}
+
+/* Filled / primary surfaces — bright glass streak */
+button:is(
+    .btn--primary,
+    .ui-btn--primary,
+    .public-header__login,
+    .login-modal__submit,
+    .profile-btn-primary,
+    .cr-submit-btn,
+    .ui-btn--primary
+)::before,
+a.btn--primary::before,
+a.cr-submit-btn::before {
+    background: var(--cms-reflect-streak);
+    mix-blend-mode: overlay;
+}
+
+.cms-btn-reflect:is(
+    button:not(:disabled):not([data-no-reflect]),
+    input[type='submit']:not(:disabled):not([data-no-reflect]),
+    input[type='button']:not(:disabled):not([data-no-reflect]),
+    input[type='reset']:not(:disabled):not([data-no-reflect]),
+    a:is(
+        .btn,
+        .ui-btn,
+        .btn-cancel,
+        .btn-secondary,
+        .btn--primary,
+        .btn--outline,
+        .btn--admin,
+        .btn--ghost,
+        .cr-submit-btn
+    )
+) > *,
+button:not(:disabled):not([data-no-reflect]) > *,
+input[type='submit']:not(:disabled):not([data-no-reflect]) > *,
+input[type='button']:not(:disabled):not([data-no-reflect]) > *,
+input[type='reset']:not(:disabled):not([data-no-reflect]) > *,
+a:is(
+    .btn,
+    .ui-btn,
+    .btn-cancel,
+    .btn-secondary,
+    .btn--primary,
+    .btn--outline,
+    .btn--admin,
+    .btn--ghost,
+    .cr-submit-btn
+) > * {
+    position: relative;
+    z-index: 2;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .cms-btn-reflect:is(
+        button:not(:disabled):not([data-no-reflect]),
+        input[type='submit']:not(:disabled):not([data-no-reflect]),
+        input[type='button']:not(:disabled):not([data-no-reflect]),
+        input[type='reset']:not(:disabled):not([data-no-reflect]),
+        a:is(
+            .btn,
+            .ui-btn,
+            .btn-cancel,
+            .btn-secondary,
+            .btn--primary,
+            .btn--outline,
+            .btn--admin,
+            .btn--ghost,
+            .cr-submit-btn
+        )
+    ):hover::before,
+    button:not(:disabled):not([data-no-reflect]):hover::before,
+    input[type='submit']:not(:disabled):not([data-no-reflect]):hover::before,
+    input[type='button']:not(:disabled):not([data-no-reflect]):hover::before,
+    input[type='reset']:not(:disabled):not([data-no-reflect]):hover::before,
+    a:is(
+        .btn,
+        .ui-btn,
+        .btn-cancel,
+        .btn-secondary,
+        .btn--primary,
+        .btn--outline,
+        .btn--admin,
+        .btn--ghost,
+        .cr-submit-btn
+    ):hover::before {
+        opacity: 1;
+        animation: cms-btn-reflect-sweep 0.58s ease;
+    }
+}
+
+.cms-btn-reflect:is(
+    button:not(:disabled):not([data-no-reflect]),
+    input[type='submit']:not(:disabled):not([data-no-reflect]),
+    input[type='button']:not(:disabled):not([data-no-reflect]),
+    input[type='reset']:not(:disabled):not([data-no-reflect]),
+    a:is(
+        .btn,
+        .ui-btn,
+        .btn-cancel,
+        .btn-secondary,
+        .btn--primary,
+        .btn--outline,
+        .btn--admin,
+        .btn--ghost,
+        .cr-submit-btn
+    )
+):focus-visible,
+button:not(:disabled):not([data-no-reflect]):focus-visible,
+input[type='submit']:not(:disabled):not([data-no-reflect]):focus-visible,
+input[type='button']:not(:disabled):not([data-no-reflect]):focus-visible,
+input[type='reset']:not(:disabled):not([data-no-reflect]):focus-visible,
+a:is(
+    .btn,
+    .ui-btn,
+    .btn-cancel,
+    .btn-secondary,
+    .btn--primary,
+    .btn--outline,
+    .btn--admin,
+    .btn--ghost,
+    .cr-submit-btn
+):focus-visible {
+    outline: 2px solid var(--brand-blue, #2563eb);
+    outline-offset: 2px;
+}
+
+/* Password show/hide control: keep centered in field, no shimmer layer */
+button.password-field__toggle {
+    position: absolute !important;
+    overflow: visible !important;
+    isolation: auto !important;
+    transform: translateY(-50%) !important;
+}
+
+button.password-field__toggle::before {
+    display: none !important;
+    content: none !important;
+}
+
+button.password-field__toggle > * {
+    position: static;
+    z-index: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .cms-btn-reflect::before,
+    button:not(:disabled)::before,
+    input[type='submit']:not(:disabled)::before,
+    input[type='button']:not(:disabled)::before,
+    input[type='reset']:not(:disabled)::before,
+    a:is(
+        .btn,
+        .ui-btn,
+        .btn-cancel,
+        .btn-secondary,
+        .btn--primary,
+        .btn--outline,
+        .btn--admin,
+        .btn--ghost,
+        .cr-submit-btn
+    )::before {
+        display: none !important;
+        animation: none !important;
+    }
+}

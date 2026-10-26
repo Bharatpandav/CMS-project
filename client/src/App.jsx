@@ -9,6 +9,7 @@ import { BulkRegistrationPage } from './pages/BulkRegistrationPage.jsx';
 import { CategoriesPage } from './pages/CategoriesPage.jsx';
 import { ChangePasswordPage } from './pages/ChangePasswordPage.jsx';
 import { ComplaintDetailPage } from './pages/ComplaintDetailPage.jsx';
+import { ComplaintLetterPage } from './pages/ComplaintLetterPage.jsx';
 import { DepartmentsPage } from './pages/DepartmentsPage.jsx';
 import { HomePage } from './pages/HomePage.jsx';
 import { PlaceholderPage } from './pages/PlaceholderPage.jsx';
@@ -32,6 +33,7 @@ import { ADMIN_STAFF_ROLES } from './utils/staffRoles.js';
 import { MANAGEMENT_PORTAL_ROLES } from './utils/managementAccess.js';
 import { UNIFIED_DASHBOARD_PATH } from './utils/appPaths.js';
 import { NotFoundPage } from './pages/NotFoundPage.jsx';
+import { ResetPasswordPage } from './pages/ResetPasswordPage.jsx';
 
 function staffDetail(role) {
     return (
@@ -78,6 +80,7 @@ function App() {
         <BrowserRouter>
             <Routes>
                 <Route path="/" element={<HomePage />} />
+                <Route path="/reset-password" element={<ResetPasswordPage />} />
                 <Route
                     path="/login"
                     element={<Navigate to="/?login=1" replace />}
@@ -85,6 +88,16 @@ function App() {
                 <Route
                     path="/admin/login"
                     element={<Navigate to="/?admin=1" replace />}
+                />
+                <Route
+                    path="/complaints/:id/letter"
+                    element={
+                        <ProtectedRoute>
+                            <RequirePasswordChanged>
+                                <ComplaintLetterPage />
+                            </RequirePasswordChanged>
+                        </ProtectedRoute>
+                    }
                 />
 
                 <Route
@@ -131,11 +144,20 @@ function App() {
                         }
                     />
                     <Route
-                        path="/student/track"
+                        path="/student/all-complaints"
                         element={
                             <RoleGate roles={['student']}>
-                                <StudentComplaintsPage title="Track Status" />
+                                <StudentComplaintsPage
+                                    title="All Complaints"
+                                    scope="public"
+                                />
                             </RoleGate>
+                        }
+                    />
+                    <Route
+                        path="/student/track"
+                        element={
+                            <Navigate to="/student/all-complaints" replace />
                         }
                     />
                     <Route path="/app/profile" element={<MyProfilePage />} />

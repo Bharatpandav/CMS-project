@@ -8,6 +8,7 @@ export function Button({
 }) {
     const classes = [
         'ui-btn',
+        'cms-btn-reflect',
         `ui-btn--${variant}`,
         block ? 'ui-btn--block' : '',
         className

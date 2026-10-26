@@ -1,99 +1,137 @@
-import { useId, useRef, useState } from 'react';
+import { useCallback, useId, useRef, useState } from 'react';
 import { ShieldCheck } from 'lucide-react';
 import { useLoginSubmit } from '../hooks/useLoginSubmit.js';
 import { PasswordField } from './PasswordField.jsx';
+import { ForgotPasswordDialog } from './ForgotPasswordDialog.jsx';
+import {
+    sanitizeUrnInput,
+    validateUrnForSubmit
+} from '../utils/urnValidation.js';
 import { Button, Dialog, FieldError, Input, Label } from './ui/index.js';
 
-export function LoginModal({ open, onClose }) {
+export function LoginModal({ open, onClose, postLoginPath }) {
     const titleId = useId();
     const descId = useId();
     const urnRef = useRef(null);
     const [urn, setUrn] = useState('');
     const [password, setPassword] = useState('');
+    const [urnError, setUrnError] = useState('');
+    const [forgotOpen, setForgotOpen] = useState(false);
 
     const { submitLogin, loading, error, setError } = useLoginSubmit({
-        onSuccess: onClose
+        onSuccess: onClose,
+        postLoginPath
     });
 
-    const handleClose = () => {
+    const handleClose = useCallback(() => {
         setUrn('');
         setPassword('');
+        setUrnError('');
         setError('');
         onClose();
-    };
+    }, [onClose, setError]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        await submitLogin(urn, password);
+        setUrnError('');
+        const check = validateUrnForSubmit(urn);
+        if (!check.ok) {
+            setUrnError(check.message);
+            return;
+        }
+        await submitLogin(check.urn, password);
     };
 
     return (
-        <Dialog
-            open={open}
-            onClose={handleClose}
-            titleId={titleId}
-            descId={descId}
-            closeLabel="Close login dialog"
-            initialFocusRef={urnRef}
-            className="login-modal"
-        >
-            <div
-                className="login-modal__icon"
-                style={{
-                    display: 'grid',
-                    placeItems: 'center',
-                    margin: '0 auto 0.75rem',
-                    color: 'var(--color-text-muted)'
-                }}
+        <>
+            <Dialog
+                open={open}
+                onClose={handleClose}
+                titleId={titleId}
+                descId={descId}
+                closeLabel="Close login dialog"
+                initialFocusRef={urnRef}
+                className="login-modal"
             >
-                <ShieldCheck size={40} strokeWidth={1.5} aria-hidden />
-            </div>
+                <div
+                    className="login-modal__icon"
+                    style={{
+                        display: 'grid',
+                        placeItems: 'center',
+                        margin: '0 auto 0.75rem',
+                        color: 'var(--color-text-muted)'
+                    }}
+                >
+                    <ShieldCheck size={40} strokeWidth={1.5} aria-hidden />
+                </div>
 
-            <h2 id={titleId} className="login-modal__title">
-                Login to your account
-            </h2>
-            <p id={descId} className="login-modal__sub">
-                Enter your URN and password to continue.
-            </p>
+                <h2 id={titleId} className="login-modal__title">
+                    Login to your account
+                </h2>
+                <p id={descId} className="login-modal__sub">
+                    Enter your URN and password to continue.
+                </p>
 
-            <form onSubmit={handleSubmit} className="login-modal__form">
-                <FieldError>{error}</FieldError>
+                <form onSubmit={handleSubmit} className="login-modal__form">
+                    <FieldError>{error}</FieldError>
 
-                <Label htmlFor="login-urn" hint="e.g. 22BCE1045">
-                    URN
-                    <Input
-                        id="login-urn"
-                        ref={urnRef}
-                        type="text"
-                        name="identifier"
-                        placeholder="Enter your URN"
-                        value={urn}
-                        onChange={(e) => setUrn(e.target.value)}
-                        autoComplete="username"
+                    <Label htmlFor="login-urn" hint="Digits only, max 10">
+                        URN
+                        <Input
+                            id="login-urn"
+                            ref={urnRef}
+                            type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            name="identifier"
+                            placeholder="Enter your URN"
+                            value={urn}
+                            onChange={(e) =>
+                                setUrn(sanitizeUrnInput(e.target.value))
+                            }
+                            autoComplete="username"
+                            disabled={loading}
+                            error={Boolean(error || urnError)}
+                        />
+                    </Label>
+                    {urnError ? (
+                        <span className="ui-field-error" role="alert">
+                            {urnError}
+                        </span>
+                    ) : null}
+
+                    <PasswordField
+                        id="login-password"
+                        label="Password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
                         disabled={loading}
-                        error={Boolean(error)}
+                        autoComplete="current-password"
+                        placeholder="Enter your password"
                     />
-                </Label>
 
-                <PasswordField
-                    id="login-password"
-                    label="Password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    disabled={loading}
-                    autoComplete="current-password"
-                    placeholder="Enter your password"
-                />
+                    <button
+                        type="button"
+                        className="login-modal__forgot link-teal"
+                        onClick={() => setForgotOpen(true)}
+                    >
+                        Forgot password?
+                    </button>
 
-                <Button type="submit" variant="primary" block disabled={loading}>
-                    {loading ? 'Logging in…' : 'Login'}
-                </Button>
-            </form>
+                    <Button type="submit" variant="primary" block disabled={loading}>
+                        {loading ? 'Logging in…' : 'Login'}
+                    </Button>
+                </form>
 
-            <p className="login-modal__note">
-                Use your university-provided credentials (URN and password) to
-                access the system.
-            </p>
-        </Dialog>
+                <p className="login-modal__note">
+                    Use your university-provided credentials (URN and password) to
+                    access the system.
+                </p>
+            </Dialog>
+            <ForgotPasswordDialog
+                open={forgotOpen}
+                onClose={() => setForgotOpen(false)}
+            />
+        </>
     );
 }

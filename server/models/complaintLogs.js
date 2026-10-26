@@ -53,7 +53,10 @@ const complaintLogSchema = new mongoose.Schema(
                 'escalated',
                 'resolved',
                 'returned',
-                'reopened'
+                'reopened',
+                'contact_viewed',
+                'comment',
+                'withdrawn'
             ]
         },
         remarks: {

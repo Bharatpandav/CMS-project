@@ -9,23 +9,31 @@ export function Dialog({
     ariaLabel,
     children,
     className = '',
+    backdropClassName = '',
     showClose = true,
     closeLabel = 'Close dialog',
     initialFocusRef
 }) {
     const panelRef = useRef(null);
+    const wasOpenRef = useRef(false);
 
     useEffect(() => {
-        if (!open) return undefined;
+        if (!open) {
+            wasOpenRef.current = false;
+            return undefined;
+        }
 
         const previousOverflow = document.body.style.overflow;
         document.body.style.overflow = 'hidden';
 
-        const focusTarget = initialFocusRef?.current;
-        if (focusTarget) {
-            focusTarget.focus();
-        } else {
-            panelRef.current?.focus();
+        if (!wasOpenRef.current) {
+            const focusTarget = initialFocusRef?.current;
+            if (focusTarget) {
+                focusTarget.focus();
+            } else {
+                panelRef.current?.focus();
+            }
+            wasOpenRef.current = true;
         }
 
         const handleKey = (e) => {
@@ -43,7 +51,7 @@ export function Dialog({
 
     return (
         <div
-            className="ui-dialog-backdrop"
+            className={`ui-dialog-backdrop ${backdropClassName}`.trim()}
             onClick={onClose}
             role="presentation"
         >

@@ -95,24 +95,6 @@
     font-weight: 500;
 }
 
-.cr-priority-wrap {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    width: 100%;
-}
-
-.cr-priority-badge {
-    font-size: 0.72rem;
-    font-weight: 500;
-    padding: 0.15rem 0.5rem;
-    border-radius: var(--radius-pill);
-    background: var(--color-tertiary);
-    color: var(--color-text);
-    border: 1px solid var(--color-border);
-    white-space: nowrap;
-}
-
 .cr-dropzone {
     border: 2px dashed #cbd5e1;
     border-radius: 12px;
@@ -141,11 +123,74 @@
     font-weight: 600;
 }
 
+.cr-access {
+    display: grid;
+    gap: 0.55rem;
+    margin: 0.25rem 0 0.85rem;
+}
+
+.cr-access__visibility {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.cr-access__visibility > span {
+    font-weight: 650;
+    color: var(--cr-navy, #0f2744);
+}
+
+.cr-access-note {
+    margin: 0;
+    padding: 0.65rem 0.75rem;
+    border-radius: 8px;
+    background: #f3f7fc;
+    color: #334155;
+    font-size: 0.88rem;
+    line-height: 1.45;
+}
+
 .cr-dropzone small {
     display: block;
     margin-top: 0.35rem;
     color: #94a3b8;
     font-size: 0.75rem;
+}
+
+.file-list li {
+    justify-content: flex-start;
+}
+
+.file-list__name {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.file-list button.file-list__thumb {
+    flex: 0 0 auto;
+    width: 72px;
+    height: 72px;
+    padding: 0;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #f8fafc;
+    color: inherit;
+    cursor: zoom-in;
+    overflow: hidden;
+}
+
+.file-list button.file-list__thumb img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.file-list button.file-list__thumb:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
 }
 
 .cr-guidelines {
