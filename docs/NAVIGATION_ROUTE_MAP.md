@@ -64,7 +64,7 @@ Requires `MANAGEMENT_PORTAL_ROLES` + password changed.
 | `/management/register` | Register User |
 | `/management/bulk` | Bulk Registration |
 | `/management/departments` | Departments |
-| `/management/import-export` | Import / Export |
+| `/management/import-export` | Redirects to Bulk Import (`/management/bulk`) |
 | `/management/complaints` | All Complaints |
 | `/management/complaints/:id` | Detail |
 | `/management/categories` | Categories |

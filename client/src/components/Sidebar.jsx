@@ -1,4 +1,4 @@
-import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import {
     IconBuilding,
     IconClipboard,
@@ -12,6 +12,7 @@ import {
     IconUsers
 } from './icons.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useLogoutToHome } from '../hooks/useLogoutToHome.js';
 import { getStaffBasePath } from '../utils/staffRoles.js';
 
 function NavItem({ to, icon, label, end, onNavigate }) {
@@ -65,17 +66,11 @@ function StudentNav({ onNavigate }) {
                 label="My Profile"
                 onNavigate={onNavigate}
             />
-            <NavItem
-                to="/student/support"
-                icon={<IconSettings />}
-                label="Support / Help"
-                onNavigate={onNavigate}
-            />
         </>
     );
 }
 
-function StaffNav({ base, onNavigate, showSystemAdmin }) {
+function StaffNav({ base, onNavigate, showSystemAdmin, hideCategories }) {
     return (
         <>
             <p className="sidebar__section">Main</p>
@@ -92,16 +87,11 @@ function StaffNav({ base, onNavigate, showSystemAdmin }) {
                 label="Complaints"
                 onNavigate={onNavigate}
             />
+            <p className="sidebar__section">Account</p>
             <NavItem
-                to={`${base}/categories`}
-                icon={<IconLayers />}
-                label="Categories"
-                onNavigate={onNavigate}
-            />
-            <NavItem
-                to="/change-password"
+                to="/app/profile"
                 icon={<IconUsers />}
-                label="Profile"
+                label="My Profile"
                 onNavigate={onNavigate}
             />
             {showSystemAdmin ? (
@@ -165,12 +155,6 @@ function AdminNav({ onNavigate }) {
                 onNavigate={onNavigate}
             />
             <NavItem
-                to="/complaints/categories"
-                icon={<IconLayers />}
-                label="Categories"
-                onNavigate={onNavigate}
-            />
-            <NavItem
                 to="/audit-logs"
                 icon={<IconClipboard />}
                 label="Audit Logs"
@@ -189,8 +173,8 @@ function AdminNav({ onNavigate }) {
 }
 
 export function Sidebar({ mobileOpen, onClose }) {
-    const { logout, user } = useAuth();
-    const navigate = useNavigate();
+    const { user } = useAuth();
+    const logoutToHome = useLogoutToHome();
     const location = useLocation();
     const isStudent = user?.role === 'student';
     const staffBase = getStaffBasePath(user?.role);
@@ -204,8 +188,7 @@ export function Sidebar({ mobileOpen, onClose }) {
         user?.role === 'super_admin' && onVcPortal;
 
     const handleLogout = async () => {
-        await logout();
-        navigate('/', { replace: true });
+        await logoutToHome();
     };
 
     const closeMobile = () => onClose?.();
@@ -238,6 +221,7 @@ export function Sidebar({ mobileOpen, onClose }) {
                             base={staffBase}
                             onNavigate={closeMobile}
                             showSystemAdmin={showVcSystemAdmin}
+                            hideCategories={user?.role === 'hod'}
                         />
                     ) : (
                         <AdminNav onNavigate={closeMobile} />

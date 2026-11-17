@@ -52,7 +52,9 @@ export function getManagementNavSections(user) {
             label: 'All Complaints'
         }
     ];
-    if (role === 'super_admin' || getStaffBasePath(role)) {
+    // Categories: shown to super_admin and other staff who manage routing,
+    // but NOT to HOD — they work with dept complaints directly.
+    if (role === 'super_admin' || (getStaffBasePath(role) && role !== 'hod')) {
         complaintItems.push({
             to: getCategoriesPathForManagement(),
             label: 'Categories'
@@ -124,6 +126,21 @@ export function getManagementQuickActions(user) {
         to: getComplaintsListPathForManagement(),
         tone: 'purple'
     });
+
+    // HODs have a dedicated dashboard with dept-scoped stats — exclude Manage Categories
+    const showCategories = role !== 'hod';
+    if (showCategories) {
+        const catPath = getCategoriesPathForManagement();
+        if (catPath && actions.length < 4) {
+            actions.push({
+                key: 'categories',
+                title: 'Manage Categories',
+                subtitle: 'Add or edit categories',
+                to: catPath,
+                tone: 'blue'
+            });
+        }
+    }
 
     return actions.slice(0, 4);
 }

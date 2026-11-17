@@ -107,7 +107,27 @@ const complaintSchema = new mongoose.Schema(
             {
                 url: { type: String, required: true },
                 filename: { type: String, default: '' },
-                fileType: { type: String, default: '' }
+                fileType: { type: String, default: '' },
+                fileSize: { type: Number, default: 0 },
+                source: {
+                    type: String,
+                    enum: ['submission', 'action', ''],
+                    default: ''
+                },
+                action: { type: String, default: '' },
+                uploadedBy: {
+                    type: mongoose.Schema.Types.ObjectId,
+                    ref: 'user',
+                    default: null
+                },
+                uploadedByName: { type: String, default: '' },
+                uploadedAt: { type: Date, default: null },
+                intendedRecipient: {
+                    type: mongoose.Schema.Types.ObjectId,
+                    ref: 'user',
+                    default: null
+                },
+                actionType: { type: String, default: '' }
             }
         ],
 
@@ -140,6 +160,7 @@ const complaintSchema = new mongoose.Schema(
                 'accepted',
                 'rejected',
                 'resolved',
+                'closed',
                 'escalated',
                 'reopened',
                 'withdrawn'
@@ -158,7 +179,33 @@ const complaintSchema = new mongoose.Schema(
 
         Date: { type: Date, required: true },
         undertaking: { type: Boolean, required: true },
-        resolvedAt: { type: Date, default: null }
+        resolvedAt: { type: Date, default: null },
+        resolutionNote: { type: String, trim: true, default: '' },
+        resolvedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'user',
+            default: null
+        },
+        resolvedByName: { type: String, trim: true, default: '' },
+        resolvedByRole: { type: String, trim: true, default: '' },
+        closedAt: { type: Date, default: null },
+        closedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'user',
+            default: null
+        },
+        closureType: {
+            type: String,
+            enum: ['manual', 'automatic', ''],
+            default: ''
+        },
+        closureAuthorizedHod: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'user',
+            default: null
+        },
+        rejectionReasonCode: { type: String, trim: true, default: '' },
+        rejectionReasonText: { type: String, trim: true, default: '' }
     },
     { timestamps: true }
 );

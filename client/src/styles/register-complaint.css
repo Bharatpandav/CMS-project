@@ -51,6 +51,63 @@
     color: #475569;
 }
 
+.cr-field__required {
+    color: #dc2626;
+    font-weight: 700;
+}
+
+.cr-field__optional {
+    font-weight: 500;
+    color: #64748b;
+}
+
+.cr-field-info {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.4rem;
+    margin: 0;
+    font-size: 0.8rem;
+    line-height: 1.45;
+    color: #475569;
+}
+
+.cr-field-info__icon {
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+    color: var(--brand-blue, #2563eb);
+}
+
+.cr-field-info--success {
+    color: #166534;
+}
+
+.cr-field-info--success .cr-field-info__icon {
+    color: #16a34a;
+}
+
+.cr-field-info--warn {
+    color: #b45309;
+}
+
+.cr-field-info--warn .cr-field-info__icon {
+    color: #d97706;
+}
+
+.cr-field--other {
+    animation: cr-field-in 0.2s ease-out;
+}
+
+@keyframes cr-field-in {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 /* Field controls use shared .ui-input-group (ui-components.css) */
 
 .cr-field .ui-input-group {

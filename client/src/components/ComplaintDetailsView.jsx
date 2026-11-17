@@ -4,13 +4,13 @@ import {
     Building2,
     Calendar,
     Copy,
-    Download,
     Eye,
     EyeOff,
     FileText,
     LogOut,
     MapPin,
     Printer,
+    CheckCircle2,
     Undo2,
     UserRound,
     Users
@@ -21,14 +21,16 @@ import { complaintAccessLabel } from '../utils/complaintAccess.js';
 import { complaintsApi } from '../api/client.js';
 import { BackButton } from './BackButton.jsx';
 import { Dialog } from './ui/Dialog.jsx';
-import { ImagePreview } from './ImagePreview.jsx';
+import { AttachmentFileList } from './AttachmentFileList.jsx';
+import { AttachmentPreviewDialog } from './AttachmentPreviewDialog.jsx';
+import { complaintStatusLabel } from '../utils/complaintStatusDisplay.js';
+import { AssignmentEscalationDetails } from './AssignmentEscalationDetails.jsx';
 
 const STAGES = [
     { key: 'submitted', label: 'Submitted' },
     { key: 'review', label: 'Under Review' },
     { key: 'progress', label: 'In Progress' },
-    { key: 'resolved', label: 'Resolved' },
-    { key: 'closed', label: 'Closed' }
+    { key: 'resolved', label: 'Resolved' }
 ];
 
 function formatWhen(value) {
@@ -56,11 +58,12 @@ function stageIndexForStatus(status) {
         case 'reopened':
             return 2;
         case 'resolved':
+        case 'closed':
             return 3;
         case 'rejected':
-            return 4;
+            return 3;
         case 'withdrawn':
-            return 4;
+            return 3;
         default:
             return 0;
     }
@@ -71,8 +74,7 @@ function logTimeForStage(logs, index, status) {
         0: ['submitted', 'pending'],
         1: ['accepted'],
         2: ['assigned', 'escalated', 'reopened'],
-        3: ['resolved'],
-        4: ['rejected', 'withdrawn']
+        3: ['resolved', 'closed', 'rejected', 'withdrawn']
     }[index] || [];
     const hit = logs.find(
         (log) =>
@@ -95,13 +97,41 @@ function fileNameFromUrl(url, index) {
     return decodeURIComponent(part.split('?')[0]);
 }
 
-function isImageSource(url, fileType = '') {
-    if (fileType.startsWith('image/')) return true;
-    if (typeof url !== 'string') return false;
-    return (
-        url.startsWith('data:image/') ||
-        /\.(png|jpe?g|gif|webp)$/i.test(url)
-    );
+function actionActivityTitle(action) {
+    switch (action) {
+        case 'assigned':
+            return 'Assignment';
+        case 'escalated':
+            return 'Escalation';
+        case 'returned':
+            return 'Return to HOD';
+        default:
+            return action || 'Action';
+    }
+}
+
+function formatStaffRole(role) {
+    const labels = {
+        advisor: 'Advisor',
+        hod: 'Head of Department',
+        dean: 'Dean',
+        super_admin: 'Super Admin'
+    };
+    return labels[role] || role || 'Staff';
+}
+
+function mergeAttachmentLists(...lists) {
+    const seen = new Set();
+    const merged = [];
+    for (const list of lists) {
+        for (const file of list || []) {
+            const key = file?.url || file?.filename;
+            if (!key || seen.has(key)) continue;
+            seen.add(key);
+            merged.push(file);
+        }
+    }
+    return merged;
 }
 
 export function ComplaintDetailsView({
@@ -147,9 +177,30 @@ export function ComplaintDetailsView({
                     );
                 }
                 if (index > currentIndex) return null;
+                if (index === 3) {
+                    return (
+                        logTimeForStage(logs, 3) || complaint?.resolvedAt || null
+                    );
+                }
+                if (
+                    index === 3 &&
+                    (complaint?.status === 'closed' ||
+                        complaint?.status === 'resolved')
+                ) {
+                    return (
+                        logTimeForStage(logs, 3) ||
+                        complaint?.resolvedAt ||
+                        complaint?.closedAt ||
+                        null
+                    );
+                }
                 return logTimeForStage(logs, index);
             }),
         [logs, complaint, currentIndex]
+    );
+
+    const submissionAttachments = (complaint?.attachments || []).filter(
+        (file) => file.source !== 'action'
     );
 
     const files = [
@@ -158,17 +209,103 @@ export function ComplaintDetailsView({
             filename: fileNameFromUrl(url, index),
             fileType: ''
         })),
-        ...(complaint?.attachments || []).map((file, index) => ({
+        ...submissionAttachments.map((file, index) => ({
             url: file.url,
             filename: file.filename || fileNameFromUrl(file.url, index),
             fileType: file.fileType || ''
         }))
     ];
 
+    const resolvedLog = useMemo(() => {
+        const hits = (logs || []).filter(
+            (log) =>
+                log.action === 'resolved' || log.newStatus === 'resolved'
+        );
+        return hits.length ? hits[hits.length - 1] : null;
+    }, [logs]);
+
+    const resolutionAttachments = useMemo(() => {
+        const fromComplaint = (complaint?.attachments || []).filter(
+            (file) =>
+                file?.source === 'action' &&
+                (file.action === 'resolved' || file.actionType === 'resolved')
+        );
+        return mergeAttachmentLists(resolvedLog?.attachments, fromComplaint);
+    }, [complaint?.attachments, resolvedLog]);
+
+    const resolutionNote = useMemo(() => {
+        const fromComplaint = (complaint?.resolutionNote || '').trim();
+        const fromLog = (resolvedLog?.remarks || '').trim();
+        return fromComplaint || fromLog;
+    }, [complaint?.resolutionNote, resolvedLog]);
+
+    const resolutionMeta = useMemo(() => {
+        const when =
+            complaint?.resolvedAt ||
+            resolvedLog?.createdAt ||
+            resolutionAttachments[0]?.uploadedAt ||
+            null;
+        const resolverUser = complaint?.resolvedBy;
+        const name =
+            (typeof resolverUser === 'object' && resolverUser?.name) ||
+            complaint?.resolvedByName ||
+            resolvedLog?.actor?.name ||
+            resolvedLog?.uploadedByName ||
+            '';
+        const role =
+            (typeof resolverUser === 'object' && resolverUser?.role) ||
+            complaint?.resolvedByRole ||
+            resolvedLog?.actorRole ||
+            '';
+        return { when, name, role };
+    }, [complaint, resolvedLog, resolutionAttachments]);
+
+    const showResolutionDetails =
+        (complaint?.status === 'resolved' ||
+            complaint?.status === 'closed') &&
+        (resolutionNote ||
+            resolutionMeta.when ||
+            resolutionMeta.name ||
+            resolutionAttachments.length > 0);
+
+    const resolutionFiles = useMemo(
+        () =>
+            resolutionAttachments.map((file, index) => ({
+                ...file,
+                filename:
+                    file.filename || fileNameFromUrl(file.url, index),
+                fileType: file.fileType || file.type || ''
+            })),
+        [resolutionAttachments]
+    );
+
+    const actionActivities = useMemo(
+        () =>
+            (logs || [])
+                .filter(
+                    (log) =>
+                        (log.attachments || []).length > 0 &&
+                        log.action !== 'resolved'
+                )
+                .map((log) => ({
+                    id: log._id,
+                    action: log.action,
+                    title: actionActivityTitle(log.action),
+                    when: log.createdAt,
+                    uploader:
+                        log.attachments?.[0]?.uploadedByName ||
+                        log.actor?.name ||
+                        log.actorRole ||
+                        'Staff',
+                    attachments: log.attachments || []
+                })),
+        [logs]
+    );
+
     const userId = String(currentUser?.id || currentUser?._id || '');
     const isStudent = currentUser?.role === 'student';
     const isGroup = complaint?.complaintType === 'group';
-    const isOpen = !['resolved', 'rejected', 'withdrawn'].includes(
+    const isOpen = !['resolved', 'closed', 'rejected', 'withdrawn'].includes(
         complaint?.status
     );
     const isCreator =
@@ -187,7 +324,7 @@ export function ComplaintDetailsView({
     const canWithdraw =
         isStudent &&
         isCreator &&
-        !['resolved', 'withdrawn'].includes(complaint?.status);
+        !['resolved', 'closed', 'withdrawn'].includes(complaint?.status);
 
     const changeMembership = async (action) => {
         if (action === 'leave' && !window.confirm('Leave this complaint?')) {
@@ -309,6 +446,11 @@ export function ComplaintDetailsView({
                         onClick={() =>
                             navigate(`/complaints/${complaint._id}/letter`)
                         }
+                        title={
+                            complaint?.status === 'closed'
+                                ? 'Resolution and closure report'
+                                : 'Complaint notice letter'
+                        }
                     >
                         <Printer size={16} aria-hidden />
                         Print / Download
@@ -343,12 +485,18 @@ export function ComplaintDetailsView({
                 </div>
                 <div>
                     <span className="cdetail__label">Status</span>
-                    <p className={`cdetail__status cdetail__status--${complaint?.status || 'submitted'}`}>
+                    <p
+                        className={`cdetail__status cdetail__status--${
+                            complaint?.status === 'closed'
+                                ? 'resolved'
+                                : complaint?.status || 'submitted'
+                        }`}
+                    >
                         {rejected
                             ? 'Rejected'
                             : withdrawn
                               ? 'Withdrawn'
-                              : complaint?.status || '—'}
+                              : complaintStatusLabel(complaint?.status) || '—'}
                     </p>
                     <div className="cdetail__field">
                         <span className="cdetail__label">
@@ -356,10 +504,6 @@ export function ComplaintDetailsView({
                             Date of submission
                         </span>
                         <strong>{formatWhen(complaint?.createdAt || complaint?.Date) || '—'}</strong>
-                    </div>
-                    <div className="cdetail__field">
-                        <span className="cdetail__label">Last updated</span>
-                        <strong>{formatWhen(complaint?.updatedAt) || '—'}</strong>
                     </div>
                 </div>
                 <div>
@@ -385,14 +529,88 @@ export function ComplaintDetailsView({
                 </div>
             </section>
 
+            {rejected && (complaint?.rejectionReasonText || '').trim() ? (
+                <aside className="cdetail__rejection" role="note">
+                    <strong>Rejection reason</strong>
+                    <p>{complaint.rejectionReasonText}</p>
+                </aside>
+            ) : null}
+
+            <AssignmentEscalationDetails
+                complaint={complaint}
+                logs={logs}
+                onOpenAttachment={(file) => setPreview(file)}
+            />
+
+            {showResolutionDetails ? (
+                <section
+                    className="cdetail__resolution-panel"
+                    aria-labelledby="cdetail-resolution-title"
+                >
+                    <header className="cdetail__resolution-header">
+                        <CheckCircle2 size={20} aria-hidden />
+                        <h2 id="cdetail-resolution-title">Resolution Details</h2>
+                    </header>
+                    <div className="cdetail__resolution-body">
+                        {resolutionNote ? (
+                            <div className="cdetail__resolution-note">
+                                <span className="cdetail__label">
+                                    Resolution note
+                                </span>
+                                <p>{resolutionNote}</p>
+                            </div>
+                        ) : null}
+                        <dl className="cdetail__resolution-facts">
+                            {resolutionMeta.name ? (
+                                <div>
+                                    <dt>Resolved by</dt>
+                                    <dd>
+                                        {resolutionMeta.name}
+                                        {resolutionMeta.role
+                                            ? ` · ${formatStaffRole(resolutionMeta.role)}`
+                                            : ''}
+                                    </dd>
+                                </div>
+                            ) : null}
+                            {resolutionMeta.when ? (
+                                <div>
+                                    <dt>Resolved on</dt>
+                                    <dd>{formatWhen(resolutionMeta.when)}</dd>
+                                </div>
+                            ) : null}
+                        </dl>
+                    </div>
+                    <div className="cdetail__resolution-files">
+                        <span className="cdetail__label">
+                            Resolution attachments
+                            {resolutionFiles.length
+                                ? ` (${resolutionFiles.length})`
+                                : ''}
+                        </span>
+                        {resolutionFiles.length === 0 ? (
+                            <p className="cdetail__empty">
+                                No files were uploaded with this resolution.
+                            </p>
+                        ) : (
+                            <AttachmentFileList
+                                files={resolutionFiles}
+                                onOpen={(file) => setPreview(file)}
+                                showDownload
+                                openActionLabel="View"
+                            />
+                        )}
+                    </div>
+                </section>
+            ) : null}
+
             <ol className="cdetail__timeline" aria-label="Complaint progress">
                 {STAGES.map((stage, index) => {
                     const done = index < currentIndex;
                     const current = index === currentIndex;
                     const label =
-                        rejected && index === 4
+                        rejected && index === 3
                             ? 'Rejected'
-                            : withdrawn && index === 4
+                            : withdrawn && index === 3
                               ? 'Withdrawn'
                               : stage.label;
                     return (
@@ -443,46 +661,49 @@ export function ComplaintDetailsView({
                         {files.length === 0 ? (
                             <p className="cdetail__empty">No attachments available.</p>
                         ) : (
-                            <ul className="cdetail__files">
-                                {files.map((file) => {
-                                    const image = isImageSource(file.url, file.fileType);
-                                    return (
-                                        <li key={file.url}>
-                                            {image ? (
-                                                <button
-                                                    type="button"
-                                                    className="cdetail__thumb"
-                                                    onClick={() => setPreview(file)}
-                                                    aria-label={`Preview ${file.filename}`}
-                                                >
-                                                    <img src={file.url} alt="" />
-                                                </button>
-                                            ) : (
-                                                <span className="cdetail__file-icon" aria-hidden>
-                                                    <FileText size={18} />
-                                                </span>
-                                            )}
-                                            {image ? (
-                                                <button
-                                                    type="button"
-                                                    className="cdetail__filename cdetail__filename--preview"
-                                                    onClick={() => setPreview(file)}
-                                                >
-                                                    {file.filename}
-                                                </button>
-                                            ) : (
-                                                <span className="cdetail__filename">{file.filename}</span>
-                                            )}
-                                            <a href={file.url} download={file.filename}>
-                                                <Download size={14} aria-hidden />
-                                                Download
-                                            </a>
-                                        </li>
-                                    );
-                                })}
-                            </ul>
+                            <AttachmentFileList
+                                files={files}
+                                onOpen={(file) => setPreview(file)}
+                                showDownload
+                            />
                         )}
                     </article>
+
+                    {actionActivities.length > 0 ? (
+                        <article className="cdetail__card cdetail__activity">
+                            <h2>Action documents</h2>
+                            <ul className="cdetail__activity-list">
+                                {actionActivities.map((activity) => (
+                                    <li key={activity.id}>
+                                        <header className="cdetail__activity-head">
+                                            <strong>{activity.title}</strong>
+                                            <span>
+                                                {formatWhen(activity.when)}
+                                                {' · '}
+                                                {activity.uploader}
+                                            </span>
+                                        </header>
+                                        <AttachmentFileList
+                                            files={activity.attachments.map(
+                                                (file, index) => ({
+                                                    ...file,
+                                                    filename:
+                                                        file.filename ||
+                                                        fileNameFromUrl(
+                                                            file.url,
+                                                            index
+                                                        )
+                                                })
+                                            )}
+                                            onOpen={(file) => setPreview(file)}
+                                            showDownload
+                                            compact
+                                        />
+                                    </li>
+                                ))}
+                            </ul>
+                        </article>
+                    ) : null}
                 </div>
 
                 <div>
@@ -650,7 +871,10 @@ export function ComplaintDetailsView({
                     </button>
                 </div>
             </Dialog>
-            <ImagePreview file={preview} onClose={() => setPreview(null)} />
+            <AttachmentPreviewDialog
+                file={preview}
+                onClose={() => setPreview(null)}
+            />
         </div>
     );
 }

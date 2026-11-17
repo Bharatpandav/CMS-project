@@ -21,7 +21,8 @@ export const DEPARTMENT_HOD_LOOKUP_ALIASES = {
     'Chemical Engineering': ['Chemical Engineering'],
     'Computer Science & Engineering': [
         'Computer Science & Engineering',
-        'Computer Science and Engineering'
+        'Computer Science and Engineering',
+        'Computer Science'
     ],
     'Electronics & Electrical Engineering': [
         'Electronics & Electrical Engineering',

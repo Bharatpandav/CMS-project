@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 import { complaintsApi } from '../api/client.js';
 import { ComplaintDetailsView } from '../components/ComplaintDetailsView.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { isSafeInternalPath, resolveComplaintsListPath } from '../utils/navigationPaths.js';
 import '../styles/complaint-detail.css';
+import { useComplaintsDataSync } from '../hooks/useComplaintsDataSync.js';
 
 export function ComplaintDetailPage() {
     const { id } = useParams();
@@ -27,29 +28,34 @@ export function ComplaintDetailPage() {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        let cancelled = false;
-        (async () => {
-            setLoading(true);
-            setError('');
+    const load = useCallback(
+        async ({ silent = false } = {}) => {
+            if (!silent) {
+                setLoading(true);
+                setError('');
+            }
             try {
                 const res = await complaintsApi.getById(id);
-                if (!cancelled) {
-                    setData(res);
-                    setLogs(res.logs || []);
-                }
+                setData(res);
+                setLogs(res.logs || []);
             } catch (err) {
-                if (!cancelled) {
+                if (!silent) {
                     setError(err.message || 'Failed to load complaint');
                 }
             } finally {
-                if (!cancelled) setLoading(false);
+                if (!silent) {
+                    setLoading(false);
+                }
             }
-        })();
-        return () => {
-            cancelled = true;
-        };
-    }, [id]);
+        },
+        [id]
+    );
+
+    useEffect(() => {
+        load();
+    }, [load]);
+
+    useComplaintsDataSync(() => load({ silent: true }), Boolean(id));
 
     if (loading) {
         return <p className="panel__loading">Loading complaint…</p>;

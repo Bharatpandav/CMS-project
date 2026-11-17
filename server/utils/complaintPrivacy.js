@@ -175,3 +175,101 @@ export function serializeComplaintForUser(complaint, user, { revealContact = fal
     }
     return out;
 }
+
+function recordId(value) {
+    if (!value) return '';
+    if (typeof value === 'object') return String(value._id || value.id || '');
+    return String(value);
+}
+
+export function isComplainantOrParticipant(user, complaint) {
+    const userIdStr = String(user?.id || user?._id || '');
+    if (!userIdStr) return false;
+    const isCreator = recordId(complaint?.raisedBy) === userIdStr;
+    const isParticipant = (complaint?.participants || []).some(
+        (p) => recordId(p.student) === userIdStr
+    );
+    return isCreator || isParticipant;
+}
+
+const INTERNAL_STUDENT_ACTIONS = new Set([
+    'assigned',
+    'escalated',
+    'returned',
+    'contact_viewed',
+    'comment'
+]);
+
+function leanLog(log) {
+    return typeof log.toObject === 'function' ? log.toObject() : { ...log };
+}
+
+/**
+ * Students/participants only see resolution (and rejection) activity attachments;
+ * staff retain full visibility.
+ */
+export function filterLogsForViewer(logs, user, complaint) {
+    if (isStaffRole(user?.role)) {
+        return logs;
+    }
+
+    const userId = String(user?.id || user?._id || '');
+    const isComplainant = isComplainantOrParticipant(user, complaint);
+
+    return (logs || []).map((log) => {
+        const doc = leanLog(log);
+        if (INTERNAL_STUDENT_ACTIONS.has(doc.action)) {
+            return {
+                ...doc,
+                attachments: [],
+                remarks: ''
+            };
+        }
+
+        if (doc.action === 'resolved' && isComplainant) {
+            return doc;
+        }
+
+        if (doc.action === 'rejected' && isComplainant) {
+            return doc;
+        }
+
+        return {
+            ...doc,
+            attachments: filterAttachmentsForUser(
+                doc.attachments,
+                userId,
+                doc.action,
+                isComplainant
+            )
+        };
+    });
+}
+
+function filterAttachmentsForUser(
+    attachments,
+    userId,
+    action,
+    isComplainant
+) {
+    const list = attachments || [];
+    return list.filter((file) => {
+        const intended = recordId(file.intendedRecipient);
+        if (intended && intended === userId) return true;
+        if (action === 'resolved' && isComplainant) return true;
+        return false;
+    });
+}
+
+/** Hide internal workflow files on the complaint document for students. */
+export function filterActionAttachmentsOnComplaint(doc, user) {
+    if (isStaffRole(user?.role) || !doc) return doc;
+    const out = { ...doc };
+    out.attachments = (out.attachments || []).filter(
+        (file) =>
+            file.source !== 'action' ||
+            file.action === 'resolved' ||
+            file.action === 'rejected'
+    );
+    return out;
+}

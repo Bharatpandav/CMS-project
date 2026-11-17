@@ -12,6 +12,7 @@ import { getEmailConfigError, sendMail } from '../utils/emailService.js';
 const PROTECTED_PROFILE_FIELDS = [
     'name',
     'email',
+    'phone',
     'role',
     'department',
     'rollNumber',
@@ -381,107 +382,25 @@ const logoutUser = (req, res) => {
     }
 };
 
+const SELF_SERVICE_PROFILE_MESSAGE =
+    'Name, email, and phone are managed by the university and cannot be changed here. You may only change your password.';
+
 const updateProfile = async (req, res) => {
     try {
-        const user = await userModel.findById(req.user.id);
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: 'User not found'
-            });
-        }
-        if (!user.isActive) {
+        const { email, phone, name } = req.body || {};
+        const attemptedChange =
+            email !== undefined || phone !== undefined || name !== undefined;
+
+        if (attemptedChange) {
             return res.status(403).json({
                 success: false,
-                message: 'Account is inactive'
+                message: SELF_SERVICE_PROFILE_MESSAGE
             });
         }
 
-        const updates = {};
-        const { email, phone, name } = req.body;
-
-        if (user.role === 'student') {
-            if (
-                (email !== undefined &&
-                    String(email).trim().toLowerCase() !== user.email) ||
-                (phone !== undefined &&
-                    String(phone).trim() !== (user.phone || ''))
-            ) {
-                return res.status(403).json({
-                    success: false,
-                    message:
-                        'Email and phone are managed by the university and cannot be changed here'
-                });
-            }
-        } else if (email !== undefined) {
-            const emailCheck = validateEmailAddress(email);
-            if (!emailCheck.ok) {
-                return res.status(400).json({
-                    success: false,
-                    message: emailCheck.message
-                });
-            }
-            const clash = await userModel.findOne({
-                email: emailCheck.email,
-                _id: { $ne: user._id }
-            });
-            if (clash) {
-                return res.status(409).json({
-                    success: false,
-                    message: 'That email is already in use'
-                });
-            }
-            updates.email = emailCheck.email;
-        }
-
-        if (phone !== undefined && user.role !== 'student') {
-            const phoneCheck = validatePhone(phone, { required: false });
-            if (!phoneCheck.ok) {
-                return res.status(400).json({
-                    success: false,
-                    message: phoneCheck.message
-                });
-            }
-            updates.phone = phoneCheck.phone;
-        }
-
-        if (name !== undefined && user.role !== 'student') {
-            const trimmed = String(name).trim();
-            if (!trimmed) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Name cannot be empty'
-                });
-            }
-            updates.name = trimmed;
-        }
-
-        Object.assign(user, updates);
-        await user.save();
-
-        const loginIdentifier =
-            user.role === 'student'
-                ? user.rollNumber || user.email
-                : user.email;
-
-        return res.json({
-            success: true,
-            message: 'Profile updated',
-            user: {
-                id: user._id,
-                name: user.name,
-                email: user.email,
-                role: user.role,
-                rollNumber: user.rollNumber || undefined,
-                department: user.department || undefined,
-                semester: user.semester ?? undefined,
-                section: user.section || undefined,
-                programme: user.programme || undefined,
-                phone: user.phone || undefined,
-                loginIdentifier,
-                isFirstLogin: user.isFirstLogin,
-                isActive: user.isActive
-            }
+        return res.status(400).json({
+            success: false,
+            message: 'No profile fields can be updated on this account'
         });
     } catch (error) {
         console.error('Update profile error:', error);

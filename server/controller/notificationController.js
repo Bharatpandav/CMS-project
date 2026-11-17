@@ -1,19 +1,22 @@
 import Notification from '../models/notificationModel.js';
 
+async function countUnread(userId) {
+    return Notification.countDocuments({
+        user: userId,
+        read: false
+    });
+}
+
 export const listNotifications = async (req, res) => {
     try {
-        const notifications = await Notification.find({
-            user: req.user.id,
-            read: false
-        })
+        const userId = req.user.id;
+        const notifications = await Notification.find({ user: userId })
             .sort({ createdAt: -1 })
             .limit(50)
+            .populate('relatedComplaint', 'publicId title')
             .lean();
 
-        const unreadCount = await Notification.countDocuments({
-            user: req.user.id,
-            read: false
-        });
+        const unreadCount = await countUnread(userId);
 
         return res.json({
             success: true,
@@ -41,7 +44,8 @@ export const dismissNotification = async (req, res) => {
                 message: 'Notification not found'
             });
         }
-        return res.json({ success: true });
+        const unreadCount = await countUnread(req.user.id);
+        return res.json({ success: true, unreadCount });
     } catch (error) {
         return res.status(500).json({
             success: false,
@@ -63,7 +67,24 @@ export const markNotificationRead = async (req, res) => {
                 message: 'Notification not found'
             });
         }
-        return res.json({ success: true, notification: updated });
+        const unreadCount = await countUnread(req.user.id);
+        return res.json({
+            success: true,
+            notification: updated,
+            unreadCount
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error'
+        });
+    }
+};
+
+export const clearAllNotifications = async (req, res) => {
+    try {
+        await Notification.deleteMany({ user: req.user.id });
+        return res.json({ success: true, unreadCount: 0 });
     } catch (error) {
         return res.status(500).json({
             success: false,
@@ -78,7 +99,8 @@ export const markAllNotificationsRead = async (req, res) => {
             { user: req.user.id, read: false },
             { read: true }
         );
-        return res.json({ success: true });
+        const unreadCount = await countUnread(req.user.id);
+        return res.json({ success: true, unreadCount });
     } catch (error) {
         return res.status(500).json({
             success: false,

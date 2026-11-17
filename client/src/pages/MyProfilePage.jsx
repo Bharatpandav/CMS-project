@@ -3,7 +3,6 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { authApi } from '../api/client.js';
 import { ChangePasswordCard } from '../components/ChangePasswordCard.jsx';
 import { ProfileInfoCard } from '../components/ProfileInfoCard.jsx';
-import { ProfileContactForm } from '../components/ProfileContactForm.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { PageHeader } from '../components/PageHeader.jsx';
 import { getProfileHomePath } from '../utils/profileFieldConfig.js';
@@ -11,7 +10,7 @@ import { getProfileHomePath } from '../utils/profileFieldConfig.js';
 export function MyProfilePage() {
     const { user } = useAuth();
     const location = useLocation();
-    const homePath = getProfileHomePath(location.pathname);
+    const homePath = getProfileHomePath(location.pathname, user?.role);
 
     const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -31,6 +30,7 @@ export function MyProfilePage() {
     };
 
     useEffect(() => {
+        document.title = 'My Profile | SBSSU CMS';
         loadProfile();
     }, []);
 
@@ -58,20 +58,14 @@ export function MyProfilePage() {
                         error={error}
                         onRetry={loadProfile}
                     />
-                    {user?.role === 'student' ? (
-                        <p className="field-hint profile-readonly-note">
-                            Email and phone are issued by the university and
-                            cannot be edited here.
-                            {!profile?.email || !profile?.phone
-                                ? ' Missing contact details must be completed by an administrator.'
-                                : ''}
-                        </p>
-                    ) : (
-                        <ProfileContactForm
-                            profile={profile}
-                            onUpdated={(u) => setProfile(u)}
-                        />
-                    )}
+                    <p className="field-hint profile-readonly-note">
+                        Name, email, and phone are issued by the university and
+                        cannot be edited here. You can change your password
+                        below.
+                        {!profile?.email || !profile?.phone
+                            ? ' Missing contact details must be completed by an administrator.'
+                            : ''}
+                    </p>
                 </div>
                 <ChangePasswordCard />
             </div>

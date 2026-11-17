@@ -20,6 +20,22 @@ const notificationSchema = new mongoose.Schema(
             ref: 'Complaint',
             default: null
         },
+        action: {
+            type: String,
+            enum: [
+                'assigned',
+                'escalated',
+                'returned',
+                'resolved',
+                'accepted',
+                'rejected',
+                'submitted',
+                'closed',
+                ''
+            ],
+            default: ''
+        },
+        actorName: { type: String, default: '' },
         read: { type: Boolean, default: false, index: true }
     },
     { timestamps: true }

@@ -4,8 +4,8 @@ import { Bell } from 'lucide-react';
 import { authApi } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { getComplaintDetailPath } from '../utils/appPaths.js';
-
-const POLL_MS = 12000;
+import { useNotificationStream } from '../hooks/useNotificationStream.js';
+import { complaintPublicId } from '../utils/complaintPublicId.js';
 
 function complaintIdOf(value) {
     if (!value) return '';
@@ -13,7 +13,35 @@ function complaintIdOf(value) {
     return String(value);
 }
 
-export function NotificationBell({ onRequestLogin, className = 'public-header__icon-btn' }) {
+function formatNotificationWhen(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleString(undefined, {
+        day: 'numeric',
+        month: 'short',
+        hour: 'numeric',
+        minute: '2-digit'
+    });
+}
+
+function notificationComplaintLabel(notification) {
+    const related = notification?.relatedComplaint;
+    if (!related) return '';
+    if (typeof related === 'object') {
+        return (
+            complaintPublicId(related) ||
+            (related._id ? String(related._id) : '')
+        );
+    }
+    return String(related);
+}
+
+export function NotificationBell({
+    onRequestLogin,
+    className = 'public-header__icon-btn',
+    badgeClassName = 'public-header__badge'
+}) {
     const { isAuthenticated, user } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
@@ -22,6 +50,7 @@ export function NotificationBell({ onRequestLogin, className = 'public-header__i
     const [unreadCount, setUnreadCount] = useState(0);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [clearing, setClearing] = useState(false);
     const panelRef = useRef(null);
 
     const loadNotifications = useCallback(async ({ quiet = false } = {}) => {
@@ -39,6 +68,11 @@ export function NotificationBell({ onRequestLogin, className = 'public-header__i
         }
     }, [isAuthenticated]);
 
+    useNotificationStream(
+        () => loadNotifications({ quiet: true }),
+        isAuthenticated
+    );
+
     useEffect(() => {
         if (!isAuthenticated) {
             setNotifications([]);
@@ -46,19 +80,15 @@ export function NotificationBell({ onRequestLogin, className = 'public-header__i
             setOpen(false);
             return undefined;
         }
-        loadNotifications();
-        const timer = window.setInterval(() => {
-            if (document.visibilityState === 'visible') {
-                loadNotifications({ quiet: true });
-            }
-        }, POLL_MS);
-        const onFocus = () => loadNotifications({ quiet: true });
-        window.addEventListener('focus', onFocus);
-        return () => {
-            window.clearInterval(timer);
-            window.removeEventListener('focus', onFocus);
-        };
+        loadNotifications({ quiet: true });
+        return undefined;
     }, [isAuthenticated, loadNotifications]);
+
+    useEffect(() => {
+        if (!open || !isAuthenticated) return undefined;
+        loadNotifications();
+        return undefined;
+    }, [open, isAuthenticated, loadNotifications]);
 
     useEffect(() => {
         if (!open) return undefined;
@@ -79,24 +109,65 @@ export function NotificationBell({ onRequestLogin, className = 'public-header__i
         setOpen((value) => !value);
     };
 
-    const openNotification = async (notification) => {
-        const complaintId = complaintIdOf(notification.relatedComplaint);
-        setNotifications((current) =>
-            current.filter((item) => item._id !== notification._id)
-        );
-        setUnreadCount((count) => Math.max(0, count - 1));
-        setOpen(false);
-        try {
-            await authApi.dismissNotification(notification._id);
-        } catch {
-            loadNotifications({ quiet: true });
-        }
-        if (!complaintId) return;
-        const path = location.pathname.startsWith('/management')
+    const complaintPathFor = (complaintId) => {
+        if (!complaintId) return null;
+        return location.pathname.startsWith('/management')
             ? `/management/complaints/${complaintId}`
             : getComplaintDetailPath(user?.role, complaintId);
+    };
+
+    const openNotification = async (notification) => {
+        const complaintId = complaintIdOf(notification.relatedComplaint);
+        const wasUnread = !notification.read;
+        const path = complaintPathFor(complaintId);
+
+        setOpen(false);
+
+        if (wasUnread) {
+            setNotifications((current) =>
+                current.map((item) =>
+                    item._id === notification._id
+                        ? { ...item, read: true }
+                        : item
+                )
+            );
+            setUnreadCount((count) => Math.max(0, count - 1));
+            try {
+                const data = await authApi.markNotificationRead(notification._id);
+                if (typeof data.unreadCount === 'number') {
+                    setUnreadCount(data.unreadCount);
+                }
+            } catch {
+                loadNotifications({ quiet: true });
+            }
+        }
+
+        if (!path) return;
         navigate(path);
     };
+
+    const handleClearAll = async () => {
+        if (clearing) return;
+        const confirmed = window.confirm(
+            'Clear all notifications? This removes your entire notification history.'
+        );
+        if (!confirmed) return;
+
+        setClearing(true);
+        setError('');
+        try {
+            const data = await authApi.clearAllNotifications();
+            setNotifications([]);
+            setUnreadCount(data.unreadCount ?? 0);
+        } catch (err) {
+            setError(err.message || 'Failed to clear notifications');
+        } finally {
+            setClearing(false);
+        }
+    };
+
+    const badgeValue =
+        unreadCount > 99 ? '99+' : String(unreadCount);
 
     return (
         <div className="notification-bell" ref={panelRef}>
@@ -113,8 +184,8 @@ export function NotificationBell({ onRequestLogin, className = 'public-header__i
             >
                 <Bell size={20} strokeWidth={1.75} aria-hidden />
                 {isAuthenticated && unreadCount > 0 ? (
-                    <span className="public-header__badge" aria-hidden>
-                        {unreadCount > 9 ? '9+' : unreadCount}
+                    <span className={badgeClassName} aria-hidden>
+                        {badgeValue}
                     </span>
                 ) : null}
             </button>
@@ -127,33 +198,76 @@ export function NotificationBell({ onRequestLogin, className = 'public-header__i
                 >
                     <header className="public-notifications__head">
                         <strong>Notifications</strong>
+                        {notifications.length > 0 ? (
+                            <button
+                                type="button"
+                                className="public-notifications__clear"
+                                onClick={handleClearAll}
+                                disabled={clearing}
+                            >
+                                {clearing ? 'Clearing…' : 'Clear all'}
+                            </button>
+                        ) : null}
                     </header>
                     {loading ? (
                         <p className="public-notifications__empty">Loading…</p>
                     ) : error ? (
-                        <p className="public-notifications__empty">{error}</p>
+                        <p className="public-notifications__empty public-notifications__empty--error">
+                            {error}
+                        </p>
                     ) : notifications.length === 0 ? (
                         <p className="public-notifications__empty">
-                            No notifications yet.
+                            You&apos;re all caught up. New complaint updates will
+                            appear here.
                         </p>
                     ) : (
                         <ul className="public-notifications__list">
-                            {notifications.map((notification) => (
-                                <li key={notification._id}>
-                                    <button
-                                        type="button"
-                                        className="public-notifications__item public-notifications__item--unread"
-                                        onClick={() => openNotification(notification)}
-                                    >
-                                        <span className="public-notifications__title">
-                                            {notification.title}
-                                        </span>
-                                        <span className="public-notifications__msg">
-                                            {notification.message}
-                                        </span>
-                                    </button>
-                                </li>
-                            ))}
+                            {notifications.map((notification) => {
+                                const complaintId = complaintIdOf(
+                                    notification.relatedComplaint
+                                );
+                                const complaintLabel =
+                                    notificationComplaintLabel(notification);
+                                return (
+                                    <li key={notification._id}>
+                                        <button
+                                            type="button"
+                                            className={
+                                                notification.read
+                                                    ? 'public-notifications__item'
+                                                    : 'public-notifications__item public-notifications__item--unread'
+                                            }
+                                            onClick={() =>
+                                                openNotification(notification)
+                                            }
+                                        >
+                                            <span className="public-notifications__title">
+                                                {notification.title}
+                                            </span>
+                                            <span className="public-notifications__msg">
+                                                {notification.message}
+                                            </span>
+                                            <span className="public-notifications__meta">
+                                                {complaintLabel ? (
+                                                    <span>
+                                                        ID {complaintLabel}
+                                                    </span>
+                                                ) : null}
+                                                <span>
+                                                    {formatNotificationWhen(
+                                                        notification.createdAt
+                                                    )}
+                                                </span>
+                                                {!notification.read ? (
+                                                    <em className="public-notifications__pill">
+                                                        Unread
+                                                    </em>
+                                                ) : null}
+                                            </span>
+                                        </button>
+                                    </li>
+                                );
+                            })}
                         </ul>
                     )}
                 </div>

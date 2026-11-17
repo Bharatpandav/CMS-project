@@ -16,6 +16,7 @@ import {
     FileText,
     FolderOpen,
     Fingerprint,
+    Globe,
     GraduationCap,
     Headphones,
     Hourglass,
@@ -37,6 +38,7 @@ import {
     Settings2,
     Tag,
     Tags,
+    Trash2,
     Type,
     UploadCloud,
     UserCheck,
@@ -81,6 +83,7 @@ const ICON_MAP = {
     'user-check': UserCheck,
     'badge-check': BadgeCheck,
     fingerprint: Fingerprint,
+    globe: Globe,
     university: Landmark,
     'file-text': FileText,
     'map-pin': MapPin,
@@ -94,7 +97,8 @@ const ICON_MAP = {
     'arrow-up': ArrowUp,
     hourglass: Hourglass,
     refresh: RefreshCw,
-    'clipboard': ClipboardList
+    'clipboard': ClipboardList,
+    trash: Trash2
 };
 
 export function AppIcon({ name, size = 'md', className = '', ...props }) {

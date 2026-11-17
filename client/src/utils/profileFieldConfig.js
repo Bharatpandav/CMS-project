@@ -89,16 +89,19 @@ export function getProfileFieldRows(profile) {
     return rows;
 }
 
-export function getProfileHomePath(pathname) {
-    if (pathname.startsWith('/management')) {
-        return '/management/dashboard';
+export function getProfileHomePath(pathname, role) {
+    if (role === 'hod') {
+        return '/hod/dashboard';
+    }
+    if (role === 'dean') {
+        return '/dean/dashboard';
+    }
+    if (role === 'super_admin') {
+        return '/vc/dashboard';
     }
     return '/app/dashboard';
 }
 
-export function getProfileRouteForPath(pathname) {
-    if (pathname.startsWith('/management')) {
-        return '/management/profile';
-    }
+export function getProfileRouteForPath() {
     return '/app/profile';
 }

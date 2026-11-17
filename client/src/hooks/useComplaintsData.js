@@ -1,20 +1,25 @@
 import { useCallback, useEffect, useState } from 'react';
 import { complaintsApi } from '../api/client.js';
+import { useComplaintsDataSync } from './useComplaintsDataSync.js';
 
 export function useComplaintsData({
     limit = 50,
     myComplaints,
     publicFeed,
-    status
+    raisedOnly,
+    status,
+    sync = true
 } = {}) {
     const [complaints, setComplaints] = useState([]);
     const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    const load = useCallback(async () => {
-        setLoading(true);
-        setError(null);
+    const load = useCallback(async ({ silent = false } = {}) => {
+        if (!silent) {
+            setLoading(true);
+            setError(null);
+        }
         try {
             const params = {
                 page: 1,
@@ -25,6 +30,9 @@ export function useComplaintsData({
             } else if (myComplaints) {
                 params.myComplaints = 'true';
             }
+            if (raisedOnly) {
+                params.raisedOnly = 'true';
+            }
             if (status) {
                 params.status = status;
             }
@@ -32,15 +40,24 @@ export function useComplaintsData({
             setComplaints(data.complaints || []);
             setTotal(data.total ?? data.complaints?.length ?? 0);
         } catch (err) {
-            setError(err.message || 'Failed to load complaints');
+            if (!silent) {
+                setError(err.message || 'Failed to load complaints');
+            }
         } finally {
-            setLoading(false);
+            if (!silent) {
+                setLoading(false);
+            }
         }
-    }, [limit, myComplaints, publicFeed, status]);
+    }, [limit, myComplaints, publicFeed, raisedOnly, status]);
 
     useEffect(() => {
         load();
     }, [load]);
+
+    useComplaintsDataSync(
+        () => load({ silent: true }),
+        sync
+    );
 
     return { complaints, total, loading, error, reload: load };
 }

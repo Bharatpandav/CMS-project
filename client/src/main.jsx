@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App.jsx'
 import { AuthProvider } from './context/AuthContext.jsx'
+import { ErrorBoundary } from './components/ErrorBoundary.jsx'
 import './styles/design-system.css'
 import './styles/layout.css'
 import './styles/ui-components.css'
@@ -15,7 +16,9 @@ import './styles/button-reflection.css'
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <AuthProvider>
-      <App />
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
     </AuthProvider>
   </StrictMode>,
 )

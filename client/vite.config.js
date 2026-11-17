@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: '0.0.0.0',
-    allowedHosts: ['remarks-cached-determines-achievement.trycloudflare.com'],
+    allowedHosts: ['northwest-glass-cow-blond.trycloudflare.com'],
     proxy: {
       '/api': {
         target: 'http://localhost:5000',

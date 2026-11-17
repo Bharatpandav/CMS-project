@@ -231,6 +231,12 @@ button[type='submit']:hover:not(:disabled),
     border-color: var(--success-border);
 }
 
+.badge--status-closed {
+    background: #ecfdf5;
+    color: #047857;
+    border-color: #a7f3d0;
+}
+
 .badge--status-rejected {
     background: var(--danger-bg);
     color: var(--danger);

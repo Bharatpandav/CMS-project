@@ -1,6 +1,9 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { resolvePostLoginPath } from '../utils/navigationPaths.js';
+import {
+    getRoleDashboardPath,
+    resolvePostLoginPath
+} from '../utils/navigationPaths.js';
 import { PasswordField } from './PasswordField.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { getPostLoginPath } from '../utils/roleRedirect.js';
@@ -110,10 +113,9 @@ export function AdminAuthModal({ open, onClose, initialMode = 'admin' }) {
                     );
                     return;
                 }
+                const mgmtDest = getManagementPostLoginPath(data.user);
+                navigate(mgmtDest, { replace: true, state: null });
                 handleClose();
-                navigate(getManagementPostLoginPath(data.user), {
-                    replace: true
-                });
                 return;
             }
 
@@ -123,13 +125,15 @@ export function AdminAuthModal({ open, onClose, initialMode = 'admin' }) {
                 return;
             }
 
-            handleClose();
-            navigate(
-                resolvePostLoginPath(data.user, location.state?.from, {
-                    dashboardFallback: getPostLoginPath(data.user)
-                }),
-                { replace: true }
+            const dashboard =
+                getRoleDashboardPath(data.user) || getPostLoginPath(data.user);
+            const dest = resolvePostLoginPath(
+                data.user,
+                location.state?.from,
+                { dashboardFallback: dashboard }
             );
+            navigate(dest, { replace: true, state: null });
+            handleClose();
         } catch (err) {
             setError(err.message || 'Invalid credentials');
         } finally {

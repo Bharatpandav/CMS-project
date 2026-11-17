@@ -1,22 +1,14 @@
-const STATUS_LABELS = {
-    submitted: 'Submitted',
-    pending: 'Pending',
-    accepted: 'Accepted',
-    assigned: 'Assigned',
-    rejected: 'Rejected',
-    resolved: 'Resolved',
-    escalated: 'Escalated',
-    reopened: 'Reopened',
-    withdrawn: 'Withdrawn'
-};
+import {
+    complaintStatusBadgeKey,
+    complaintStatusLabel
+} from '../utils/complaintStatusDisplay.js';
 
 export function StatusBadge({ status }) {
-    const key = (status || '').toLowerCase().replace(/\s+/g, '_');
-    const safeKey = STATUS_LABELS[key] ? key : 'pending';
-    const label = STATUS_LABELS[safeKey] || status || 'Unknown';
+    const key = complaintStatusBadgeKey(status);
+    const label = complaintStatusLabel(status);
 
     return (
-        <span className={`badge badge--status badge--status-${safeKey}`}>
+        <span className={`badge badge--status badge--status-${key}`}>
             {label}
         </span>
     );

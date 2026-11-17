@@ -1,10 +1,48 @@
-import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { AppIcon } from './AppIcon.jsx';
 import { getPortalNavSections } from '../config/roleNavigation.js';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useLogoutToHome } from '../hooks/useLogoutToHome.js';
 import { getNavIconKey } from '../utils/navIcons.js';
 
 function isPortalItemActive(pathname, to) {
+    if (pathname === to) return true;
+
+    if (to === '/student/dashboard') {
+        return pathname === '/student/dashboard';
+    }
+
+    if (to === '/hod/dashboard') {
+        return pathname === '/hod/dashboard';
+    }
+
+    if (to === '/dean/dashboard') {
+        return pathname === '/dean/dashboard';
+    }
+
+    if (to === '/vc/dashboard') {
+        return pathname === '/vc/dashboard';
+    }
+
+    if (to === '/app/dashboard') {
+        return (
+            pathname === '/app/dashboard' ||
+            pathname === '/advisor/dashboard' ||
+            pathname === '/dean/dashboard' ||
+            pathname === '/student/dashboard' ||
+            pathname === '/dashboard' ||
+            pathname === '/portal'
+        );
+    }
+
+    if (to === '/app/profile') {
+        return (
+            pathname === '/app/profile' ||
+            pathname === '/management/profile' ||
+            pathname === '/student/profile'
+        );
+    }
+
     if (to === '/student/complaints/register') {
         return pathname === '/student/complaints/register';
     }
@@ -21,10 +59,40 @@ function isPortalItemActive(pathname, to) {
         if (pathname === '/complaints') return true;
         return /^\/complaints\/(?!categories(?:\/|$))[^/]+/.test(pathname);
     }
-    if (pathname === to) return true;
-    if (to === '/app/dashboard' || to === '/management/dashboard') {
-        return pathname === to;
+
+    if (to === '/management/users') {
+        if (pathname === '/management/users' || pathname === '/users') return true;
+        if (
+            pathname.startsWith('/users/') &&
+            pathname !== '/users/register' &&
+            pathname !== '/users/bulk'
+        ) {
+            return true;
+        }
+        return false;
     }
+
+    if (to === '/management/register') {
+        return (
+            pathname === '/management/register' ||
+            pathname === '/users/register'
+        );
+    }
+
+    if (to === '/management/bulk') {
+        return (
+            pathname === '/management/bulk' ||
+            pathname === '/users/bulk'
+        );
+    }
+
+    if (to === '/management/departments') {
+        return (
+            pathname === '/management/departments' ||
+            pathname === '/departments'
+        );
+    }
+
     return pathname.startsWith(`${to}/`);
 }
 
@@ -51,15 +119,14 @@ function NavLinkItem({ to, label, onNavigate }) {
 }
 
 export function PortalSidebar({ variant = 'desktop', mobileOpen, onClose }) {
-    const { user, logout } = useAuth();
-    const navigate = useNavigate();
+    const { user } = useAuth();
+    const logoutToHome = useLogoutToHome();
     const sections = getPortalNavSections(user);
     const closeMobile = () => onClose?.();
 
     const handleLogout = async () => {
         closeMobile();
-        await logout();
-        navigate('/', { replace: true });
+        await logoutToHome();
     };
 
     const isMobile = variant === 'mobile';

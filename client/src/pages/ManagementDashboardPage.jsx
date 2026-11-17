@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { managementApi } from '../api/client.js';
 import { ComplaintsOverviewChart } from '../components/management/ComplaintsOverviewChart.jsx';
@@ -14,6 +14,7 @@ import {
 import { computeComplaintStats } from '../utils/complaintStats.js';
 import { AppIcon } from '../components/AppIcon.jsx';
 import { PageHeader } from '../components/PageHeader.jsx';
+import { useDashboardUserStatsSync } from '../hooks/useDashboardUserStatsSync.js';
 
 function formatToday() {
     return new Date().toLocaleDateString(undefined, {
@@ -79,29 +80,34 @@ export function ManagementDashboardPage() {
     const complaintsPath = getComplaintsListPathForManagement();
     const detailBase = '/management/complaints';
 
-    useEffect(() => {
+    const loadUserStats = useCallback(async ({ silent = false } = {}) => {
         if (!canManageUsers(role)) return;
-        let cancelled = false;
-        (async () => {
+        if (!silent) {
             setUserStatsLoading(true);
             setUserStatsError('');
-            try {
-                const data = await managementApi.getStats();
-                if (!cancelled) setUserStats(data.stats);
-            } catch (err) {
-                if (!cancelled) {
-                    setUserStatsError(
-                        err.message || 'Could not load user statistics'
-                    );
-                }
-            } finally {
-                if (!cancelled) setUserStatsLoading(false);
+        }
+        try {
+            const data = await managementApi.getStats();
+            setUserStats(data.stats);
+        } catch (err) {
+            if (!silent) {
+                setUserStatsError(
+                    err.message || 'Could not load user statistics'
+                );
             }
-        })();
-        return () => {
-            cancelled = true;
-        };
+        } finally {
+            if (!silent) setUserStatsLoading(false);
+        }
     }, [role]);
+
+    useEffect(() => {
+        loadUserStats();
+    }, [loadUserStats]);
+
+    useDashboardUserStatsSync(
+        () => loadUserStats({ silent: true }),
+        canManageUsers(role)
+    );
 
     const roleLabel = getManagementRoleLabel(role);
     const showUserStats = canManageUsers(role);
@@ -147,7 +153,7 @@ export function ManagementDashboardPage() {
                         }
                         sub={
                             userStats
-                                ? `${userStats.totalStudents} Students | ${userStats.totalStaff} Staff`
+                                ? `${userStats.activeStudents ?? userStats.totalStudents ?? 0} Active Students | ${userStats.activeStaff ?? userStats.totalStaff ?? 0} Active Staff`
                                 : ''
                         }
                     />

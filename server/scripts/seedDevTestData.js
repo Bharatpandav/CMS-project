@@ -24,6 +24,7 @@ import { ensureDefaultCategories } from '../utils/categoryHelper.js';
 import Category from '../models/categoryModel.js';
 import { DURATIONS, addTime } from '../utils/deadlineHelper.js';
 import { assertSafeToSeed } from './lib/databaseSafety.js';
+import { allocateComplaintPublicId } from '../utils/complaintPublicId.js';
 
 dotenv.config();
 
@@ -238,7 +239,7 @@ async function seedComplaints(usersByKey, categoryAcademic) {
             tag: '01-submitted',
             raisedBy: studentA,
             department: DEPT_CSE,
-            title: `${COMPLAINT_TAG} Newly submitted — awaiting HOD review`,
+            title: `${COMPLAINT_TAG} Hostel water supply`,
             status: 'submitted',
             currentLevel: 'hod',
             currentAssignee: hodCse._id,
@@ -259,7 +260,7 @@ async function seedComplaints(usersByKey, categoryAcademic) {
             tag: '02-accepted',
             raisedBy: studentA,
             department: DEPT_CSE,
-            title: `${COMPLAINT_TAG} Accepted by HOD`,
+            title: `${COMPLAINT_TAG} Classroom fan fault`,
             status: 'accepted',
             currentLevel: 'hod',
             currentAssignee: hodCse._id,
@@ -286,7 +287,7 @@ async function seedComplaints(usersByKey, categoryAcademic) {
             tag: '03-assigned-advisor',
             raisedBy: studentA,
             department: DEPT_CSE,
-            title: `${COMPLAINT_TAG} Assigned to advisor`,
+            title: `${COMPLAINT_TAG} Lab system fault`,
             status: 'assigned',
             currentLevel: 'advisor',
             currentAssignee: advisor._id,
@@ -308,7 +309,7 @@ async function seedComplaints(usersByKey, categoryAcademic) {
             tag: '04-rejected',
             raisedBy: studentB,
             department: DEPT_CSE,
-            title: `${COMPLAINT_TAG} Rejected with reason`,
+            title: `${COMPLAINT_TAG} Mess food quality`,
             status: 'rejected',
             currentLevel: 'hod',
             currentAssignee: hodCse._id,
@@ -329,7 +330,7 @@ async function seedComplaints(usersByKey, categoryAcademic) {
             tag: '05-resolved',
             raisedBy: studentA,
             department: DEPT_CSE,
-            title: `${COMPLAINT_TAG} Resolved with note`,
+            title: `${COMPLAINT_TAG} Library book shortage`,
             status: 'resolved',
             currentLevel: 'advisor',
             currentAssignee: advisor._id,
@@ -352,7 +353,7 @@ async function seedComplaints(usersByKey, categoryAcademic) {
             tag: '06-escalated-dean',
             raisedBy: studentB,
             department: DEPT_CSE,
-            title: `${COMPLAINT_TAG} Escalated to Dean`,
+            title: `${COMPLAINT_TAG} Exam hall seating`,
             status: 'escalated',
             currentLevel: 'dean',
             currentAssignee: dean._id,
@@ -374,10 +375,11 @@ async function seedComplaints(usersByKey, categoryAcademic) {
             tag: '07-escalated-vc',
             raisedBy: studentA,
             department: DEPT_CSE,
-            title: `${COMPLAINT_TAG} Escalated to VC`,
+            title: `${COMPLAINT_TAG} Campus Wi-Fi outage`,
             status: 'escalated',
             currentLevel: 'vc',
             currentAssignee: vc._id,
+            assignedBy: dean._id,
             initialLevel: 'hod',
             levelDeadline: addTime(DURATIONS.DEAN),
             logs: [
@@ -396,7 +398,7 @@ async function seedComplaints(usersByKey, categoryAcademic) {
             tag: '08-group-pending-invite',
             raisedBy: studentA,
             department: DEPT_CSE,
-            title: `${COMPLAINT_TAG} Group — pending invitation`,
+            title: `${COMPLAINT_TAG} Group library hours`,
             complaintType: 'group',
             visibility: 'public',
             isGroupComplaint: true,
@@ -432,7 +434,7 @@ async function seedComplaints(usersByKey, categoryAcademic) {
             tag: '09-group-accepted',
             raisedBy: studentA,
             department: DEPT_CSE,
-            title: `${COMPLAINT_TAG} Group — participant accepted`,
+            title: `${COMPLAINT_TAG} Group lab slot`,
             complaintType: 'group',
             visibility: 'public',
             isGroupComplaint: true,
@@ -556,6 +558,7 @@ async function seedComplaints(usersByKey, categoryAcademic) {
         const description = `Development test scenario ${tag}. Safe to delete or re-seed.`;
 
         const complaint = await Complaint.create({
+            publicId: await allocateComplaintPublicId(raisedBy.rollNumber),
             raisedBy: raisedBy._id,
             raisedByName: raisedBy.name,
             studentProfile: studentProfile(raisedBy),

@@ -28,6 +28,25 @@ const ACCEPTED_IMAGE_TYPES = [
     'image/gif'
 ];
 
+const OTHER_CATEGORY_NAME = 'Other';
+
+function FieldLabel({ children, required, optional }) {
+    return (
+        <span className="cr-field__label">
+            {children}
+            {required ? (
+                <span className="cr-field__required" aria-hidden="true">
+                    {' '}
+                    *
+                </span>
+            ) : null}
+            {optional ? (
+                <span className="cr-field__optional"> (Optional)</span>
+            ) : null}
+        </span>
+    );
+}
+
 const GUIDELINES = [
     'Provide a clear and concise title.',
     'Select the most relevant category and department.',
@@ -124,7 +143,10 @@ export function RegisterComplaintPage() {
     const [dragOver, setDragOver] = useState(false);
 
     const [categoryId, setCategoryId] = useState('');
+    const [customCategoryName, setCustomCategoryName] = useState('');
     const [department, setDepartment] = useState('');
+    const [routingPreview, setRoutingPreview] = useState(null);
+    const [routingLoading, setRoutingLoading] = useState(false);
     const [departmentOptions, setDepartmentOptions] =
         useState(COMPLAINT_DEPARTMENTS);
     const departmentUserEdited = useRef(false);
@@ -150,6 +172,7 @@ export function RegisterComplaintPage() {
                 title.trim() ||
                     description.trim() ||
                     categoryId ||
+                    customCategoryName.trim() ||
                     department ||
                     location.trim() ||
                     imageFiles.length
@@ -160,6 +183,7 @@ export function RegisterComplaintPage() {
             title,
             description,
             categoryId,
+            customCategoryName,
             department,
             location,
             imageFiles.length
@@ -206,6 +230,52 @@ export function RegisterComplaintPage() {
         [categories, categoryId]
     );
 
+    const isOtherCategory = useMemo(
+        () => selectedCategory?.name === OTHER_CATEGORY_NAME,
+        [selectedCategory]
+    );
+
+    useEffect(() => {
+        if (!isOtherCategory) {
+            setCustomCategoryName('');
+        }
+    }, [isOtherCategory]);
+
+    useEffect(() => {
+        if (!department || !departmentOptions.includes(department)) {
+            setRoutingPreview(null);
+            return;
+        }
+
+        let cancelled = false;
+        setRoutingLoading(true);
+
+        complaintsApi
+            .getRoutingPreview({
+                department,
+                categoryId: categoryId || undefined
+            })
+            .then((data) => {
+                if (!cancelled) {
+                    setRoutingPreview(data);
+                }
+            })
+            .catch(() => {
+                if (!cancelled) {
+                    setRoutingPreview(null);
+                }
+            })
+            .finally(() => {
+                if (!cancelled) {
+                    setRoutingLoading(false);
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [department, categoryId, departmentOptions]);
+
     const suggestedDepartment = useMemo(
         () => suggestComplaintDepartment(selectedCategory, profile),
         [selectedCategory, profile]
@@ -249,6 +319,16 @@ export function RegisterComplaintPage() {
         if (!categoryId) {
             errors.categoryId = 'Please select a complaint category';
         }
+        if (isOtherCategory && !customCategoryName.trim()) {
+            errors.customCategoryName =
+                'Please specify your complaint category';
+        } else if (
+            isOtherCategory &&
+            customCategoryName.trim().length > 120
+        ) {
+            errors.customCategoryName =
+                'Custom category must be 120 characters or fewer';
+        }
         if (!department) {
             errors.department = 'Please select a related department';
         } else if (!departmentOptions.includes(department)) {
@@ -284,6 +364,7 @@ export function RegisterComplaintPage() {
         setFieldErrors(errors);
         const order = [
             'categoryId',
+            'customCategoryName',
             'department',
             'title',
             'description',
@@ -361,7 +442,7 @@ export function RegisterComplaintPage() {
         ) {
             return;
         }
-        navigate('/app/dashboard');
+        navigate('/student/dashboard');
     };
 
     const handleSubmit = async (e) => {
@@ -384,6 +465,9 @@ export function RegisterComplaintPage() {
 
             const payload = {
                 categoryId,
+                ...(isOtherCategory
+                    ? { customCategoryName: customCategoryName.trim() }
+                    : {}),
                 department,
                 title: toShortTitle(title),
                 description: description.trim(),
@@ -408,8 +492,12 @@ export function RegisterComplaintPage() {
             const lower = message.toLowerCase();
             const field = lower.includes('department')
                 ? 'department'
-                : lower.includes('category')
-                  ? 'categoryId'
+                : lower.includes('specify')
+                  ? 'customCategoryName'
+                  : lower.includes('custom category')
+                    ? 'customCategoryName'
+                    : lower.includes('category')
+                      ? 'categoryId'
                   : lower.includes('title')
                     ? 'title'
                     : lower.includes('description')
@@ -465,7 +553,7 @@ export function RegisterComplaintPage() {
         <div className="complaint-register">
             <PageHeader
                 breadcrumbs={[
-                    { to: '/app/dashboard', label: 'Dashboard' },
+                    { to: '/student/dashboard', label: 'Dashboard' },
                     { label: 'Register Complaint' }
                 ]}
                 title="Register a Complaint"
@@ -585,14 +673,14 @@ export function RegisterComplaintPage() {
 
                         <div className="cr-form-row cr-form-row--2">
                             <div className="cr-field" data-field="categoryId">
-                                <span className="cr-field__label">
-                                    Complaint Category *
-                                </span>
+                                <FieldLabel required>
+                                    Complaint Category
+                                </FieldLabel>
                                 <InputGroup
                                     icon={
                                         <AppIcon name="tag" size="sm" />
                                     }
-                                >
+                                    >
                                     <select
                                         className="ui-input-group__field"
                                         value={categoryId}
@@ -605,6 +693,7 @@ export function RegisterComplaintPage() {
                                         aria-invalid={Boolean(
                                             fieldErrors.categoryId
                                         )}
+                                        aria-required="true"
                                     >
                                         <option value="">
                                             Select a category
@@ -623,9 +712,9 @@ export function RegisterComplaintPage() {
                             </div>
 
                             <div className="cr-field" data-field="department">
-                                <span className="cr-field__label">
-                                    Related Department *
-                                </span>
+                                <FieldLabel required>
+                                    Related Department
+                                </FieldLabel>
                                 <InputGroup
                                     icon={
                                         <AppIcon
@@ -633,7 +722,7 @@ export function RegisterComplaintPage() {
                                             size="sm"
                                         />
                                     }
-                                >
+                                    >
                                     <select
                                         className="ui-input-group__field"
                                         value={department}
@@ -647,11 +736,8 @@ export function RegisterComplaintPage() {
                                         aria-invalid={Boolean(
                                             fieldErrors.department
                                         )}
-                                        aria-describedby={
-                                            suggestedDepartment
-                                                ? 'cr-dept-suggestion'
-                                                : undefined
-                                        }
+                                        aria-required="true"
+                                        aria-describedby="cr-routing-preview cr-dept-suggestion"
                                     >
                                         <option value="">
                                             Select a department
@@ -663,6 +749,53 @@ export function RegisterComplaintPage() {
                                         ))}
                                     </select>
                                 </InputGroup>
+                                {department ? (
+                                    <p
+                                        id="cr-routing-preview"
+                                        className={`cr-field-info${
+                                            routingPreview?.found
+                                                ? ' cr-field-info--success'
+                                                : routingPreview &&
+                                                    !routingPreview.found
+                                                  ? ' cr-field-info--warn'
+                                                  : ''
+                                        }`}
+                                        role="status"
+                                    >
+                                        <span
+                                            className="cr-field-info__icon"
+                                            aria-hidden="true"
+                                        >
+                                            <AppIcon
+                                                name={
+                                                    routingPreview &&
+                                                    !routingPreview.found
+                                                        ? 'circle-alert'
+                                                        : 'info'
+                                                }
+                                                size="sm"
+                                            />
+                                        </span>
+                                        <span>
+                                            {routingLoading
+                                                ? 'Looking up routing…'
+                                                : routingPreview?.found
+                                                  ? routingPreview.level ===
+                                                    'dean'
+                                                      ? `Your complaint will be forwarded to ${routingPreview.assigneeName}, Dean for initial review.`
+                                                      : `Your complaint will be forwarded to ${routingPreview.assigneeName}, HOD of ${routingPreview.department || department}.`
+                                                  : routingPreview?.level ===
+                                                      'dean'
+                                                    ? 'No active Dean is assigned for institutional complaints yet.'
+                                                    : 'The HOD for this department has not been assigned yet.'}
+                                        </span>
+                                    </p>
+                                ) : (
+                                    <span className="field-hint">
+                                        Choose the department that should
+                                        handle this complaint.
+                                    </span>
+                                )}
                                 {suggestedDepartment &&
                                 suggestedDepartment !== department ? (
                                     <p
@@ -692,22 +825,50 @@ export function RegisterComplaintPage() {
                                         Pre-filled from category — you can
                                         choose another department if needed.
                                     </p>
-                                ) : (
-                                    <span className="field-hint">
-                                        Choose the department that should
-                                        handle this complaint.
-                                    </span>
-                                )}
+                                ) : null}
                                 <FieldError
                                     message={fieldErrors.department}
                                 />
                             </div>
                         </div>
 
+                        {isOtherCategory ? (
+                            <div
+                                className="cr-field cr-field--other"
+                                data-field="customCategoryName"
+                            >
+                                <FieldLabel required>
+                                    Specify Complaint Category
+                                </FieldLabel>
+                                <InputGroup
+                                    icon={<AppIcon name="tag" size="sm" />}
+                                >
+                                    <input
+                                        type="text"
+                                        className="ui-input-group__field"
+                                        placeholder="Enter your complaint category"
+                                        value={customCategoryName}
+                                        maxLength={120}
+                                        onChange={(e) =>
+                                            setCustomCategoryName(
+                                                e.target.value
+                                            )
+                                        }
+                                        disabled={submitting}
+                                        aria-invalid={Boolean(
+                                            fieldErrors.customCategoryName
+                                        )}
+                                        aria-required="true"
+                                    />
+                                </InputGroup>
+                                <FieldError
+                                    message={fieldErrors.customCategoryName}
+                                />
+                            </div>
+                        ) : null}
+
                         <div className="cr-field" data-field="title">
-                            <span className="cr-field__label">
-                                Complaint Title *
-                            </span>
+                            <FieldLabel required>Complaint Title</FieldLabel>
                             <InputGroup
                                 icon={
                                     <AppIcon name="file-text" size="sm" />
@@ -734,9 +895,9 @@ export function RegisterComplaintPage() {
                         </div>
 
                         <div className="cr-field" data-field="description">
-                            <span className="cr-field__label">
-                                Complaint Description *
-                            </span>
+                            <FieldLabel required>
+                                Complaint Description
+                            </FieldLabel>
                             <InputGroup
                                 textarea
                                 icon={
@@ -767,9 +928,7 @@ export function RegisterComplaintPage() {
                         </div>
 
                         <div className="cr-field">
-                            <span className="cr-field__label">
-                                Location (Optional)
-                            </span>
+                            <FieldLabel optional>Location</FieldLabel>
                             <InputGroup
                                 icon={<AppIcon name="map-pin" size="sm" />}
                             >
@@ -787,9 +946,9 @@ export function RegisterComplaintPage() {
                         </div>
 
                         <div className="cr-field">
-                            <span className="cr-field__label">
-                                Upload Images / Documents (Optional)
-                            </span>
+                            <FieldLabel optional>
+                                Upload Images / Documents
+                            </FieldLabel>
                             <div
                                 className={`cr-dropzone${dragOver ? ' is-dragover' : ''}`}
                                 onDragOver={(e) => {
@@ -910,10 +1069,10 @@ export function RegisterComplaintPage() {
                                 }
                                 disabled={submitting}
                             />
-                            <span>
+                            <FieldLabel required>
                                 I confirm the information is accurate and I
                                 understand the complaint process.
-                            </span>
+                            </FieldLabel>
                         </label>
                         <FieldError message={fieldErrors.undertaking} />
 
@@ -951,23 +1110,6 @@ export function RegisterComplaintPage() {
                                 </li>
                             ))}
                         </ul>
-                    </article>
-                    <article className="cr-help-card">
-                        <div className="cr-help-card__head">
-                            <AppIcon name="info" size="md" />
-                            Need Help?
-                        </div>
-                        <p>
-                            If you are unsure about the category or department,
-                            you can contact the helpdesk.
-                        </p>
-                        <Link
-                            to="/student/support"
-                            className="cr-help-btn"
-                        >
-                            <AppIcon name="headphones" size="sm" />
-                            Contact Support
-                        </Link>
                     </article>
                 </aside>
             </div>

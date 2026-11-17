@@ -115,6 +115,10 @@ export const authApi = {
         apiRequest('/api/user/notifications/read-all', {
             method: 'PATCH'
         }),
+    clearAllNotifications: () =>
+        apiRequest('/api/user/notifications', {
+            method: 'DELETE'
+        }),
     logout: () =>
         apiRequest('/api/user/logout', { method: 'POST' }),
     changePassword: (currentPassword, newPassword) =>
@@ -131,6 +135,13 @@ export const complaintsApi = {
     getPublicStats: () => apiRequest('/api/complaints/public-stats'),
     getCategories: () => apiRequest('/api/complaints/categories'),
     getDepartments: () => apiRequest('/api/complaints/departments'),
+    getRoutingPreview: ({ department, categoryId }) => {
+        const query = new URLSearchParams({ department });
+        if (categoryId) {
+            query.set('categoryId', categoryId);
+        }
+        return apiRequest(`/api/complaints/routing-preview?${query}`);
+    },
     create: (payload) =>
         apiRequest('/api/complaints/create', {
             method: 'POST',
@@ -174,6 +185,11 @@ export const complaintsApi = {
         apiRequest(`/api/complaints/resolve/${id}`, {
             method: 'PUT',
             body: JSON.stringify(body)
+        }),
+    close: (id) =>
+        apiRequest(`/api/complaints/close/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify({})
         })
 };
 
@@ -181,6 +197,10 @@ export const staffApi = {
     getAssignableUsers: (department) =>
         apiRequest(
             `/api/user/assignable?department=${encodeURIComponent(department)}`
+        ),
+    getEscalationTargets: (department) =>
+        apiRequest(
+            `/api/user/escalation-targets?department=${encodeURIComponent(department)}`
         )
 };
 
@@ -201,6 +221,10 @@ export const managementApi = {
             method: 'PATCH',
             body: JSON.stringify({ isActive })
         }),
+    deleteUser: (id) =>
+        apiRequest(`/api/users/${id}`, {
+            method: 'DELETE'
+        }),
     exportCsv: async (params = {}) => {
         const query = new URLSearchParams(params).toString();
         const token = getAuthToken();
@@ -216,6 +240,29 @@ export const managementApi = {
         }
         return response.blob();
     }
+};
+
+export const hodApi = {
+    /**
+     * Fetch department-scoped dashboard statistics for the authenticated HOD.
+     * The server resolves the department from the HOD's DB record — no client param needed.
+     */
+    getDashboardStats: () => apiRequest('/api/hod/dashboard-stats')
+};
+
+export const vcApi = {
+    /** VC-scoped complaint stats plus institution-wide active user counts. */
+    getDashboardStats: () => apiRequest('/api/vc/dashboard-stats')
+};
+
+export const deanApi = {
+    /** Dean-scoped complaint stats plus institution-wide active user counts. */
+    getDashboardStats: () => apiRequest('/api/dean/dashboard-stats')
+};
+
+export const studentApi = {
+    /** Complaint stats for complaints raised by the authenticated student. */
+    getDashboardStats: () => apiRequest('/api/student/dashboard-stats')
 };
 
 export const usersApi = {
@@ -234,5 +281,15 @@ export const usersApi = {
             method: 'POST',
             body: form
         });
-    }
+    },
+    bulkValidate: (records) =>
+        apiRequest('/api/users/bulk/validate', {
+            method: 'POST',
+            body: JSON.stringify({ records })
+        }),
+    bulkImportValidated: (records, skippedInvalid = 0) =>
+        apiRequest('/api/users/bulk/import', {
+            method: 'POST',
+            body: JSON.stringify({ records, skippedInvalid })
+        })
 };

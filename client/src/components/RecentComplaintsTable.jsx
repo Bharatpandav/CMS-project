@@ -11,6 +11,7 @@ import { complaintSubject } from '../utils/complaintTitle.js';
 import { complaintPublicId } from '../utils/complaintPublicId.js';
 import { complaintAccessLabel } from '../utils/complaintAccess.js';
 import { EmptyState } from './ui/index.js';
+import { isResolvedLikeStatus } from '../utils/complaintStatusDisplay.js';
 
 function formatDate(value) {
     if (!value) return '—';
@@ -78,12 +79,18 @@ export function RecentComplaintsTable({
                     </tr>
                 </thead>
                 <tbody>
-                    {complaints.map((row) => (
+                    {complaints.map((row) => {
+                        const status = (row.status || '').toLowerCase();
+                        const rowClass =
+                            status === 'withdrawn'
+                                ? 'is-withdrawn'
+                                : isResolvedLikeStatus(status)
+                                  ? 'is-resolved'
+                                  : undefined;
+                        return (
                         <tr
                             key={row._id}
-                            className={
-                                row.status === 'withdrawn' ? 'is-withdrawn' : undefined
-                            }
+                            className={rowClass}
                         >
                             <td className="mono">{complaintPublicId(row) || '—'}</td>
                             <td className="title-cell" title={complaintSubject(row.title)}>
@@ -122,7 +129,8 @@ export function RecentComplaintsTable({
                                 </Link>
                             </td>
                         </tr>
-                    ))}
+                        );
+                    })}
                 </tbody>
             </table>
             {showViewAll ? (

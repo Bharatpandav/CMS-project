@@ -1,4 +1,5 @@
 import { allowedRoles } from './authorizeUserManagement.js';
+import { canManageTargetUserRole } from '../utils/userManageableRoles.js';
 
 export const MANAGEMENT_PORTAL_ROLES = [
     'super_admin',
@@ -34,14 +35,7 @@ const authorizeManagementAccess = (req, res, next) => {
     next();
 };
 
-export const assertCanManageTargetRole = (actorRole, targetRole) => {
-    const creatable = allowedRoles[actorRole] || [];
-
-    if (actorRole === 'super_admin' && targetRole === 'super_admin') {
-        return false;
-    }
-
-    return creatable.includes(targetRole);
-};
+export const assertCanManageTargetRole = (actorRole, targetRole) =>
+    canManageTargetUserRole(actorRole, targetRole);
 
 export default authorizeManagementAccess;

@@ -5,7 +5,7 @@ import { getRoleDashboardPath } from '../utils/navigationPaths.js';
 export function ProtectedRoute({
     children,
     roles,
-    loginTo = '/?login=1'
+    loginTo = '/'
 }) {
     const { isAuthenticated, loading, user } = useAuth();
     const location = useLocation();

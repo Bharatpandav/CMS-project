@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { PageHeader } from '../components/PageHeader.jsx';
 import { RecentComplaintsTable } from '../components/RecentComplaintsTable.jsx';
 import { useComplaintsData } from '../hooks/useComplaintsData.js';
@@ -9,20 +9,24 @@ export function StudentComplaintsPage({
     scope = 'mine'
 }) {
     const location = useLocation();
-    const listStateKey = location.pathname;
+    const [searchParams] = useSearchParams();
+    const listStateKey = location.pathname + location.search;
     const isPublic = scope === 'public';
+    const status = isPublic ? undefined : searchParams.get('status') || undefined;
     useListUiRestore(listStateKey);
     const { complaints, loading, error, reload } = useComplaintsData({
         limit: 50,
-        myComplaints: isPublic ? undefined : 'true',
-        publicFeed: isPublic
+        myComplaints: isPublic ? undefined : true,
+        raisedOnly: isPublic ? undefined : true,
+        publicFeed: isPublic,
+        status
     });
 
     return (
         <div className="page-stack">
             <PageHeader
                 breadcrumbs={[
-                    { to: '/app/dashboard', label: 'Dashboard' },
+                    { to: '/student/dashboard', label: 'Dashboard' },
                     { label: title }
                 ]}
                 title={title}
@@ -58,10 +62,6 @@ export function StudentComplaintsPage({
                     className="link-teal"
                 >
                     Register a new complaint
-                </Link>
-                {' · '}
-                <Link to="/student/support" className="link-teal">
-                    Support
                 </Link>
             </p>
         </div>

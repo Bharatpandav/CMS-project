@@ -3,6 +3,13 @@ import userModel from '../models/userModel.js';
 import generatePassword from '../utils/generatePassword.js';
 import escapeRegExp from '../utils/escapeRegExp.js';
 import { allowedRoles } from '../middleware/authorizeUserManagement.js';
+import { publishUserStatsInvalidation } from '../utils/dashboardEventHub.js';
+import { applyDepartmentUserFilter } from '../utils/departmentUserFilter.js';
+import {
+    departmentsAlign,
+    findInstitutionalDean,
+    findViceChancellor
+} from '../utils/complaintWorkflowHelper.js';
 
 const createUser = async (req, res) => {
     try {
@@ -50,11 +57,66 @@ const createUser = async (req, res) => {
             });
         }
 
+        const creator = await userModel
+            .findById(req.user.id)
+            .select('role department isActive')
+            .lean();
+
+        if (!creator?.isActive) {
+            return res.status(403).json({
+                success: false,
+                message: 'Your account is inactive'
+            });
+        }
+
+        let assignedDepartment = department?.trim() || undefined;
+
+        if (creator.role === 'hod') {
+            const hodDepartment = (creator.department || '').trim();
+            if (!hodDepartment) {
+                return res.status(422).json({
+                    success: false,
+                    message:
+                        'Your HOD account has no department assigned. Contact the administrator before registering users.'
+                });
+            }
+
+            if (!['student', 'advisor'].includes(role)) {
+                return res.status(403).json({
+                    success: false,
+                    message:
+                        'HOD accounts may only register Student and Advisor users'
+                });
+            }
+
+            const requestedDept = (department || '').trim();
+            if (requestedDept && requestedDept !== hodDepartment) {
+                return res.status(403).json({
+                    success: false,
+                    message:
+                        'You cannot register users outside your own department'
+                });
+            }
+
+            assignedDepartment = hodDepartment;
+        }
+
         // Student-specific required fields
         if (role === 'student' && (!rollNumber || !rollNumber.trim())) {
             return res.status(400).json({
                 success: false,
                 message: 'Student accounts require a roll number / URN'
+            });
+        }
+
+        if (
+            (role === 'student' || role === 'advisor') &&
+            creator.role === 'hod' &&
+            !assignedDepartment
+        ) {
+            return res.status(422).json({
+                success: false,
+                message: 'Department assignment is required'
             });
         }
 
@@ -105,7 +167,7 @@ const createUser = async (req, res) => {
             email: normalizedEmail,
             password: hashedPassword,
             role,
-            department: department?.trim() || undefined,
+            department: assignedDepartment,
             rollNumber: rollNumber?.trim() || undefined,
             semester: semester ? Number(semester) : undefined,
             section: section?.trim() || undefined,
@@ -118,6 +180,10 @@ const createUser = async (req, res) => {
             user.role === 'student'
                 ? user.rollNumber
                 : user.email;
+
+        publishUserStatsInvalidation(
+            user.department ? [user.department] : []
+        );
 
         return res.status(201).json({
             success: true,
@@ -159,31 +225,32 @@ const getAssignableUsers = async (req, res) => {
 
         const department = (req.query.department || '').trim();
 
-        if (!department) {
-            return res.status(400).json({
-                success: false,
-                message: 'department query parameter is required'
-            });
-        }
-
         let filter;
 
         if (actor.role === 'hod') {
-            filter = {
-                isActive: true,
-                $or: [
-                    { role: 'advisor', department },
-                    { role: 'dean' }
-                ]
-            };
+            if (!department) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'department query parameter is required'
+                });
+            }
+            if (!actor.department) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'HOD department is not configured'
+                });
+            }
+            if (!departmentsAlign(actor.department, department)) {
+                return res.status(403).json({
+                    success: false,
+                    message:
+                        'Not authorized to assign users for this department'
+                });
+            }
+            filter = { isActive: true, role: 'advisor' };
+            applyDepartmentUserFilter(filter, actor.department);
         } else if (actor.role === 'dean') {
-            filter = {
-                isActive: true,
-                $or: [
-                    { role: 'hod', department },
-                    { role: 'advisor', department }
-                ]
-            };
+            filter = { isActive: true, role: 'hod' };
         } else {
             return res.status(403).json({
                 success: false,
@@ -194,7 +261,11 @@ const getAssignableUsers = async (req, res) => {
         const users = await userModel
             .find(filter)
             .select('name email role department')
-            .sort({ role: 1, name: 1 })
+            .sort(
+                actor.role === 'dean'
+                    ? { department: 1, name: 1 }
+                    : { role: 1, name: 1 }
+            )
             .lean();
 
         return res.json({ success: true, users });
@@ -208,4 +279,85 @@ const getAssignableUsers = async (req, res) => {
     }
 };
 
-export { createUser, getAssignableUsers };
+const getEscalationTargets = async (req, res) => {
+    try {
+        const actor = await userModel
+            .findById(req.user.id)
+            .select('role department isActive');
+
+        if (!actor?.isActive) {
+            return res.status(403).json({
+                success: false,
+                message: 'Account is inactive'
+            });
+        }
+
+        const department = (req.query.department || '').trim();
+
+        if (actor.role === 'hod') {
+            if (
+                department &&
+                actor.department &&
+                !departmentsAlign(actor.department, department)
+            ) {
+                return res.status(403).json({
+                    success: false,
+                    message:
+                        'Not authorized to escalate complaints for this department'
+                });
+            }
+
+            const dean = await findInstitutionalDean();
+            if (!dean) {
+                return res.json({ success: true, users: [] });
+            }
+
+            return res.json({
+                success: true,
+                users: [
+                    {
+                        _id: dean._id,
+                        name: dean.name,
+                        email: dean.email,
+                        role: dean.role,
+                        department: dean.department || ''
+                    }
+                ]
+            });
+        }
+
+        if (actor.role === 'dean') {
+            const vc = await findViceChancellor();
+            if (!vc) {
+                return res.json({ success: true, users: [] });
+            }
+
+            return res.json({
+                success: true,
+                users: [
+                    {
+                        _id: vc._id,
+                        name: vc.name,
+                        email: vc.email,
+                        role: vc.role,
+                        department: vc.department || ''
+                    }
+                ]
+            });
+        }
+
+        return res.status(403).json({
+            success: false,
+            message: 'Not authorized to list escalation targets'
+        });
+    } catch (error) {
+        console.error('Escalation targets error:', error);
+
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error'
+        });
+    }
+};
+
+export { createUser, getAssignableUsers, getEscalationTargets };

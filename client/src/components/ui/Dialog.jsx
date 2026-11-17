@@ -1,5 +1,44 @@
 import { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
+
+/** @type {Array<{ onClose: () => void }>} */
+const openModalLayers = [];
+
+function lockBodyScroll() {
+    if (openModalLayers.length === 1) {
+        document.body.style.overflow = 'hidden';
+    }
+}
+
+function unlockBodyScrollIfIdle() {
+    if (openModalLayers.length === 0) {
+        document.body.style.overflow = '';
+    }
+}
+
+function onDocumentEscape(event) {
+    if (event.key !== 'Escape' || openModalLayers.length === 0) return;
+    const top = openModalLayers[openModalLayers.length - 1];
+    event.preventDefault();
+    event.stopPropagation();
+    top.onClose();
+}
+
+let escapeListenerAttached = false;
+
+function ensureEscapeListener() {
+    if (escapeListenerAttached) return;
+    document.addEventListener('keydown', onDocumentEscape);
+    escapeListenerAttached = true;
+}
+
+function teardownEscapeListenerIfIdle() {
+    if (openModalLayers.length === 0 && escapeListenerAttached) {
+        document.removeEventListener('keydown', onDocumentEscape);
+        escapeListenerAttached = false;
+    }
+}
 
 export function Dialog({
     open,
@@ -16,6 +55,7 @@ export function Dialog({
 }) {
     const panelRef = useRef(null);
     const wasOpenRef = useRef(false);
+    const layerRef = useRef(null);
 
     useEffect(() => {
         if (!open) {
@@ -23,8 +63,11 @@ export function Dialog({
             return undefined;
         }
 
-        const previousOverflow = document.body.style.overflow;
-        document.body.style.overflow = 'hidden';
+        const layer = { onClose };
+        layerRef.current = layer;
+        openModalLayers.push(layer);
+        lockBodyScroll();
+        ensureEscapeListener();
 
         if (!wasOpenRef.current) {
             const focusTarget = initialFocusRef?.current;
@@ -36,20 +79,20 @@ export function Dialog({
             wasOpenRef.current = true;
         }
 
-        const handleKey = (e) => {
-            if (e.key === 'Escape') onClose();
-        };
-        document.addEventListener('keydown', handleKey);
-
         return () => {
-            document.body.style.overflow = previousOverflow;
-            document.removeEventListener('keydown', handleKey);
+            const idx = openModalLayers.indexOf(layer);
+            if (idx >= 0) {
+                openModalLayers.splice(idx, 1);
+            }
+            layerRef.current = null;
+            unlockBodyScrollIfIdle();
+            teardownEscapeListenerIfIdle();
         };
     }, [open, onClose, initialFocusRef]);
 
     if (!open) return null;
 
-    return (
+    return createPortal(
         <div
             className={`ui-dialog-backdrop ${backdropClassName}`.trim()}
             onClick={onClose}
@@ -78,6 +121,7 @@ export function Dialog({
                 ) : null}
                 {children}
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }

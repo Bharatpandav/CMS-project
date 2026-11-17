@@ -1,27 +1,19 @@
-import { useId } from 'react';
-import { Dialog } from './ui/Dialog.jsx';
-import '../styles/image-preview.css';
+import { AttachmentPreviewDialog } from './AttachmentPreviewDialog.jsx';
 
+/** @deprecated Use AttachmentPreviewDialog — kept for complaint registration images */
 export function ImagePreview({ file, onClose }) {
-    const titleId = useId();
-    const open = Boolean(file?.url);
-
     return (
-        <Dialog
-            open={open}
+        <AttachmentPreviewDialog
+            file={
+                file
+                    ? {
+                          url: file.url,
+                          filename: file.filename,
+                          fileType: file.fileType || 'image/png'
+                      }
+                    : null
+            }
             onClose={onClose}
-            titleId={titleId}
-            ariaLabel="Image preview"
-            className="image-preview"
-            backdropClassName="image-preview-backdrop"
-            closeLabel="Close image preview"
-        >
-            <h2 id={titleId} className="image-preview__title">
-                {file?.filename || 'Attachment'}
-            </h2>
-            {open ? (
-                <img src={file.url} alt={file.filename || 'Attachment preview'} />
-            ) : null}
-        </Dialog>
+        />
     );
 }

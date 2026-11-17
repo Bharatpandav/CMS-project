@@ -8,6 +8,10 @@ export const MANAGEMENT_PROFILE_PATH = '/management/profile';
 export function getPostLoginDestination(user) {
     if (!user) return '/';
     if (user.isFirstLogin) return '/change-password';
+    if (user.role === 'hod') return '/hod/dashboard';
+    if (user.role === 'dean') return '/dean/dashboard';
+    if (user.role === 'super_admin') return '/vc/dashboard';
+    if (user.role === 'student') return '/student/dashboard';
     return UNIFIED_DASHBOARD_PATH;
 }
 

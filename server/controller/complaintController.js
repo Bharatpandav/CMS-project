@@ -4,9 +4,13 @@ import ComplaintInvitation from '../models/complaintInvitationModel.js';
 import Category from '../models/categoryModel.js';
 import User from '../models/userModel.js';
 import { DURATIONS, addTime } from '../utils/deadlineHelper.js';
-import { ensureDefaultCategories } from '../utils/categoryHelper.js';
+import {
+    ensureDefaultCategories,
+    OTHER_CATEGORY_NAME
+} from '../utils/categoryHelper.js';
 import {
     assertTransition,
+    canAuthorizeComplaintClose,
     canActAsCurrentHandler,
     findDepartmentHod,
     findInstitutionalDean,
@@ -15,18 +19,40 @@ import {
     isTerminalStatus,
     loadActor,
     recordComplaintLog,
+    requiresInitialAcceptance,
     validateAssignTarget
 } from '../utils/complaintWorkflowHelper.js';
 import {
     COMPLAINT_DEPARTMENTS,
     isAllowedComplaintDepartment
 } from '../constants/complaintDepartments.js';
+import { applyHodStatusBucketToFilter } from '../utils/hodComplaintStatsHelper.js';
+import {
+    backfillVcDeanHandoffIfMissing,
+    resolveDeanHandoffForVc
+} from '../utils/vcRoutingDisplay.js';
 import {
     canResolveComplaintContact,
-    serializeComplaintForUser
+    serializeComplaintForUser,
+    filterLogsForViewer,
+    filterActionAttachmentsOnComplaint
 } from '../utils/complaintPrivacy.js';
-import { createNotification, notifyComplaintWatchers, notifyUsers } from '../utils/notificationHelper.js';
+import {
+    complainantRecipientIds,
+    createNotification,
+    notifyActionRecipients,
+    notifyComplaintTrackingStaff,
+    notifyComplaintWatchers,
+    notifyNewComplaintSubmitted,
+    notifyUsers
+} from '../utils/notificationHelper.js';
 import { allocateComplaintPublicId } from '../utils/complaintPublicId.js';
+import { validateRejectionPayload } from '../constants/complaintRejectionReasons.js';
+import {
+    mergeIntoComplaintAttachments,
+    stampActionAttachments,
+    validateActionAttachments
+} from '../utils/complaintActionAttachments.js';
 import {
     canJoinStoredComplaint,
     resolveComplaintAccess
@@ -37,6 +63,28 @@ import {
     titleMentionsStatus,
     titleWithoutStatus
 } from '../utils/complaintTitle.js';
+
+const resolveActionAttachments = (
+    body,
+    complaint,
+    actor,
+    actionKey,
+    intendedRecipientId
+) => {
+    const validation = validateActionAttachments(body?.attachments);
+    if (!validation.ok) {
+        return { error: validation.message };
+    }
+    if (!validation.files.length) {
+        return { files: [], stamped: [] };
+    }
+    const stamped = stampActionAttachments(validation.files, actor, {
+        intendedRecipient: intendedRecipientId,
+        actionType: actionKey
+    });
+    mergeIntoComplaintAttachments(complaint, stamped, actionKey);
+    return { files: validation.files, stamped };
+};
 
 // Helper: Check if user is authorized to access a private complaint
 const recordId = (value) => {
@@ -82,10 +130,18 @@ const isUserAuthorizedForComplaint = (complaint, user) => {
 const getCategories = async (req, res) => {
     try {
         await ensureDefaultCategories();
-        const categories = await Category.find({ isActive: true })
+        let categories = await Category.find({ isActive: true })
             .select('name description targetDepartment initialLevel')
             .sort({ name: 1 })
             .lean();
+
+        const otherRows = categories.filter(
+            (row) => row.name === OTHER_CATEGORY_NAME
+        );
+        categories = categories.filter(
+            (row) => row.name !== OTHER_CATEGORY_NAME
+        );
+        categories = [...categories, ...otherRows];
 
         res.json({ success: true, categories });
     } catch (error) {
@@ -98,6 +154,78 @@ const getComplaintDepartments = async (req, res) => {
         success: true,
         departments: COMPLAINT_DEPARTMENTS
     });
+};
+
+const getComplaintRoutingPreview = async (req, res) => {
+    try {
+        const department = (req.query.department || '').trim();
+        const categoryId = req.query.categoryId;
+
+        if (!department || !isAllowedComplaintDepartment(department)) {
+            return res.status(400).json({
+                success: false,
+                message: 'A valid related department is required'
+            });
+        }
+
+        let initialLevel = 'hod';
+        if (categoryId) {
+            const categoryDoc = await Category.findOne({
+                _id: categoryId,
+                isActive: true
+            })
+                .select('initialLevel')
+                .lean();
+            if (categoryDoc?.initialLevel) {
+                initialLevel = categoryDoc.initialLevel;
+            }
+        }
+
+        if (initialLevel === 'dean') {
+            const dean = await findInstitutionalDean();
+            if (!dean) {
+                return res.json({
+                    success: true,
+                    found: false,
+                    level: 'dean',
+                    department
+                });
+            }
+
+            return res.json({
+                success: true,
+                found: true,
+                level: 'dean',
+                assigneeName: dean.name,
+                assigneeRole: 'dean',
+                department
+            });
+        }
+
+        const hod = await findDepartmentHod(department);
+        if (!hod) {
+            return res.json({
+                success: true,
+                found: false,
+                level: 'hod',
+                department
+            });
+        }
+
+        return res.json({
+            success: true,
+            found: true,
+            level: 'hod',
+            assigneeName: hod.name,
+            assigneeRole: 'hod',
+            department
+        });
+    } catch (error) {
+        return res.status(500).json({
+            success: false,
+            message: error.message || 'Internal server error'
+        });
+    }
 };
 
 // ==================== 2. CREATE COMPLAINT ====================
@@ -116,7 +244,8 @@ const createComplaint = async (req, res) => {
             images,
             photos,
             attachments,
-            undertaking
+            undertaking,
+            customCategoryName
         } = req.body;
 
         if (!undertaking) {
@@ -240,7 +369,28 @@ const createComplaint = async (req, res) => {
             });
         }
 
-        const finalCategory = categoryDoc.name;
+        let finalCategory = categoryDoc.name;
+        if (
+            categoryDoc.name.toLowerCase() ===
+            OTHER_CATEGORY_NAME.toLowerCase()
+        ) {
+            const custom = String(customCategoryName || '').trim();
+            if (!custom) {
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        'Please specify a complaint category when Other is selected'
+                });
+            }
+            if (custom.length > 120) {
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        'Custom category must be 120 characters or fewer'
+                });
+            }
+            finalCategory = custom;
+        }
         const finalDepartment = (department || '').trim();
 
         if (!isAllowedComplaintDepartment(finalDepartment)) {
@@ -378,33 +528,11 @@ const createComplaint = async (req, res) => {
 
         await complaint.save();
 
-        if (currentAssignee) {
-            await createNotification({
-                userId: currentAssignee,
-                title: 'New complaint for you',
-                message: `A new complaint ${complaint.publicId} "${complaint.title}" was routed to you.`,
-                type: 'complaint',
-                relatedComplaint: complaint._id
-            });
-        }
-
-        if (finalVisibility === 'public') {
-            const recipients = await User.find({
-                isActive: true,
-                _id: {
-                    $nin: [student._id, currentAssignee].filter(Boolean)
-                }
-            }).select('_id');
-            await notifyUsers(
-                recipients.map((person) => person._id),
-                {
-                    title: 'New complaint',
-                    message: `A new complaint ${complaint.publicId} "${complaint.title}" was registered.`,
-                    type: 'complaint',
-                    relatedComplaint: complaint._id
-                }
-            );
-        }
+        await notifyNewComplaintSubmitted({
+            complaint,
+            student,
+            routedAssigneeId: currentAssignee
+        });
 
         await recordComplaintLog({
             complaintId: complaint._id,
@@ -440,7 +568,8 @@ const getComplaints = async (req, res) => {
             complaintType,
             visibility,
             myComplaints,
-            publicFeed
+            publicFeed,
+            raisedOnly
         } = req.query;
 
         const user = await User.findById(id).select('department role isActive');
@@ -461,12 +590,16 @@ const getComplaints = async (req, res) => {
                     status: { $ne: 'withdrawn' }
                 };
             } else if (myComplaints === 'true') {
-                filter = {
-                    $or: [
-                        { raisedBy: id },
-                        { 'participants.student': id }
-                    ]
-                };
+                if (raisedOnly === 'true') {
+                    filter = { raisedBy: id };
+                } else {
+                    filter = {
+                        $or: [
+                            { raisedBy: id },
+                            { 'participants.student': id }
+                        ]
+                    };
+                }
             } else {
                 filter = {
                     $or: [
@@ -501,7 +634,18 @@ const getComplaints = async (req, res) => {
             filter = roleFilter;
         }
 
-        if (status) filter.status = status;
+        if (status) {
+            if (
+                role === 'hod' ||
+                role === 'dean' ||
+                role === 'super_admin' ||
+                role === 'student'
+            ) {
+                applyHodStatusBucketToFilter(filter, status);
+            } else {
+                filter.status = status;
+            }
+        }
         if (category) filter.category = category;
         if (complaintType) filter.complaintType = complaintType;
         if (visibility) filter.visibility = visibility;
@@ -540,6 +684,9 @@ const getComplaintById = async (req, res) => {
             .populate('raisedBy', 'name email rollNumber department')
             .populate('currentAssignee', 'name email role department')
             .populate('assignedBy', 'name email role department')
+            .populate('resolvedBy', 'name email role department')
+            .populate('closedBy', 'name email role department')
+            .populate('closureAuthorizedHod', 'name email role department')
             .populate(
                 'participants.student',
                 'name rollNumber department semester section'
@@ -568,9 +715,14 @@ const getComplaintById = async (req, res) => {
             });
         }
 
-        const logs = await ComplaintLog.find({ complaint: complaint._id }).sort({
-            createdAt: 1
-        });
+        let logs = await ComplaintLog.find({ complaint: complaint._id })
+            .populate('actor', 'name role')
+            .populate('newAssignee', 'name role')
+            .populate('previousAssignee', 'name role')
+            .populate('actionRecipient', 'name role')
+            .sort({
+                createdAt: 1
+            });
 
         // Invitations are visible to creator and staff
         let invitations = [];
@@ -603,12 +755,38 @@ const getComplaintById = async (req, res) => {
             }).sort({ createdAt: -1 });
         }
 
-        const serialized = serializeComplaintForUser(complaint, userContext);
+        let serialized = serializeComplaintForUser(complaint, userContext);
+        serialized = filterActionAttachmentsOnComplaint(
+            serialized,
+            userContext
+        );
+
+        let deanHandoffBy = await resolveDeanHandoffForVc(complaint, logs);
+        if (!deanHandoffBy) {
+            deanHandoffBy = await backfillVcDeanHandoffIfMissing(complaint);
+            if (deanHandoffBy) {
+                await complaint.populate(
+                    'assignedBy',
+                    'name email role department'
+                );
+                logs = await ComplaintLog.find({ complaint: complaint._id })
+                    .populate('actor', 'name role')
+                    .populate('newAssignee', 'name role')
+                    .populate('previousAssignee', 'name role')
+                    .populate('actionRecipient', 'name role')
+                    .sort({ createdAt: 1 });
+            }
+        }
+        if (deanHandoffBy) {
+            serialized.deanHandoffBy = deanHandoffBy;
+        }
+
+        const visibleLogs = filterLogsForViewer(logs, userContext, complaint);
 
         res.json({
             success: true,
             complaint: serialized,
-            logs,
+            logs: visibleLogs,
             invitations,
             canRevealContact: canResolveComplaintContact(
                 userContext,
@@ -676,9 +854,14 @@ const addComplaintComment = async (req, res) => {
             remarks: text
         });
 
-        const logs = await ComplaintLog.find({ complaint: complaint._id }).sort({
-            createdAt: 1
-        });
+        const logs = await ComplaintLog.find({ complaint: complaint._id })
+            .populate('actor', 'name role')
+            .populate('newAssignee', 'name role')
+            .populate('previousAssignee', 'name role')
+            .populate('actionRecipient', 'name role')
+            .sort({
+                createdAt: 1
+            });
 
         return res.status(201).json({
             success: true,
@@ -774,10 +957,10 @@ const getComplaintContact = async (req, res) => {
 
 const getPublicComplaintStats = async (req, res) => {
     try {
-        const registered = await Complaint.countDocuments({
-            status: { $ne: 'withdrawn' }
-        });
-        const resolved = await Complaint.countDocuments({ status: 'resolved' });
+        const [registered, resolved] = await Promise.all([
+            Complaint.countDocuments({}),
+            Complaint.countDocuments({ status: 'resolved' })
+        ]);
         return res.json({
             success: true,
             stats: {
@@ -1247,20 +1430,13 @@ const assignComplaint = async (req, res) => {
     try {
         const complaintId = req.params.id || req.body.complaintId;
         const { assignToId, remarks, reason } = req.body;
-        const assignmentReason = (remarks || reason || '').trim();
+        const assignmentRemarks = (remarks || reason || '').trim();
         const assignerId = req.user.id;
 
         if (!assignToId) {
             return res.status(400).json({
                 success: false,
                 message: 'assignToId is required'
-            });
-        }
-
-        if (!assignmentReason) {
-            return res.status(400).json({
-                success: false,
-                message: 'Assignment reason is required'
             });
         }
 
@@ -1293,6 +1469,14 @@ const assignComplaint = async (req, res) => {
             return res.status(400).json({
                 success: false,
                 message: 'Closed complaints cannot be reassigned'
+            });
+        }
+
+        if (requiresInitialAcceptance(complaint.status)) {
+            return res.status(403).json({
+                success: false,
+                message:
+                    'Accept the complaint before assigning, escalating, or resolving.'
             });
         }
 
@@ -1336,20 +1520,51 @@ const assignComplaint = async (req, res) => {
                 ? DURATIONS.HOD
                 : DURATIONS.DEAN;
 
+        const attachmentResult = resolveActionAttachments(
+            req.body,
+            complaint,
+            assigner,
+            'assigned',
+            assignee._id
+        );
+        if (attachmentResult.error) {
+            return res.status(400).json({
+                success: false,
+                message: attachmentResult.error
+            });
+        }
+
         complaint.currentLevel = nextLevel;
         complaint.currentAssignee = assignee._id;
         complaint.assignedBy = assignerId;
+        if (assigner.role === 'hod') {
+            complaint.closureAuthorizedHod = assignerId;
+        }
+        if (
+            assigner.role === 'dean' &&
+            assignee.role === 'hod' &&
+            assignee.department
+        ) {
+            complaint.department = assignee.department;
+        }
         complaint.levelDeadline = addTime(duration);
         complaint.status = 'assigned';
         await complaint.save();
 
-        await notifyComplaintWatchers(complaint, {
-            actorId: assignerId,
-            extraUserIds: [assignee._id],
-            title: 'Complaint update',
-            message: complaint.publicId
-                ? `Complaint ${complaint.publicId} "${complaint.title}" is now assigned.`
-                : `Complaint "${complaint.title}" is now assigned.`
+        await notifyActionRecipients({
+            recipientIds: [assignee._id],
+            complaint,
+            actor: assigner,
+            action: 'assigned',
+            remarks: assignmentRemarks,
+            attachmentCount: attachmentResult.stamped?.length || 0
+        });
+
+        await notifyComplaintTrackingStaff({
+            complaint,
+            actor: assigner,
+            action: 'assigned',
+            message: `${assigner.name} assigned complaint ${complaint.publicId || ''} to ${assignee.name} (${nextLevel}).`.trim()
         });
 
         await recordComplaintLog({
@@ -1361,7 +1576,9 @@ const assignComplaint = async (req, res) => {
             newAssignee: assignee._id,
             level: nextLevel,
             action: 'assigned',
-            remarks: assignmentReason
+            remarks: assignmentRemarks,
+            attachments: attachmentResult.stamped || [],
+            actionRecipient: assignee._id
         });
 
         res.json({
@@ -1378,8 +1595,13 @@ const assignComplaint = async (req, res) => {
 const updateComplaintStatus = async (req, res) => {
     try {
         const complaintId = req.params.id || req.body.complaintId;
-        const { action, remarks, reason } = req.body;
-        const note = (remarks || reason || '').trim();
+        const {
+            action,
+            remarks,
+            reason,
+            rejectionReasonCode,
+            rejectionReasonOther
+        } = req.body;
 
         if (!['accepted', 'rejected'].includes(action)) {
             return res.status(400).json({
@@ -1429,16 +1651,37 @@ const updateComplaintStatus = async (req, res) => {
             });
         }
 
-        if (action === 'rejected' && !note) {
-            return res.status(400).json({
-                success: false,
-                message: 'Rejection reason is required'
+        let note = '';
+        let rejectionMeta = null;
+
+        if (action === 'rejected') {
+            const rejectionCheck = validateRejectionPayload({
+                rejectionReasonCode,
+                rejectionReasonOther,
+                remarks: remarks || reason
             });
+            if (!rejectionCheck.ok) {
+                return res.status(400).json({
+                    success: false,
+                    message: rejectionCheck.message
+                });
+            }
+            note = rejectionCheck.note;
+            rejectionMeta = {
+                rejectionReasonCode: rejectionCheck.rejectionReasonCode,
+                rejectionReasonText: rejectionCheck.rejectionReasonText
+            };
+        } else {
+            note = (remarks || reason || '').trim();
         }
 
         const previousStatus = complaint.status;
 
         complaint.status = action;
+        if (rejectionMeta) {
+            complaint.rejectionReasonCode = rejectionMeta.rejectionReasonCode;
+            complaint.rejectionReasonText = rejectionMeta.rejectionReasonText;
+        }
         await complaint.save();
 
         await notifyComplaintWatchers(complaint, {
@@ -1447,6 +1690,18 @@ const updateComplaintStatus = async (req, res) => {
             message: complaint.publicId
                 ? `Your complaint ${complaint.publicId} "${complaint.title}" is now ${action}.`
                 : `Your complaint "${complaint.title}" is now ${action}.`
+        });
+
+        const publicId = complaint.publicId || String(complaint._id);
+        const trackingMessage =
+            action === 'rejected'
+                ? `${actor.name} rejected complaint ${publicId}. ${note.slice(0, 180)}`
+                : `${actor.name} accepted complaint ${publicId}.`;
+        await notifyComplaintTrackingStaff({
+            complaint,
+            actor,
+            action,
+            message: trackingMessage
         });
 
         await recordComplaintLog({
@@ -1475,15 +1730,8 @@ const updateComplaintStatus = async (req, res) => {
 const escalateComplaint = async (req, res) => {
     try {
         const complaintId = req.params.id || req.body.complaintId;
-        const { remarks, reason } = req.body;
-        const escalationReason = (remarks || reason || '').trim();
-
-        if (!escalationReason) {
-            return res.status(400).json({
-                success: false,
-                message: 'Escalation reason is required'
-            });
-        }
+        const { remarks, reason, escalateToId } = req.body;
+        const escalationRemarks = (remarks || reason || '').trim();
 
         const actor = await loadActor(req.user.id);
 
@@ -1510,6 +1758,14 @@ const escalateComplaint = async (req, res) => {
             });
         }
 
+        if (requiresInitialAcceptance(complaint.status)) {
+            return res.status(403).json({
+                success: false,
+                message:
+                    'Accept the complaint before assigning, escalating, or resolving.'
+            });
+        }
+
         const transition = assertTransition('escalate', complaint.status);
 
         if (!transition.ok) {
@@ -1533,19 +1789,10 @@ const escalateComplaint = async (req, res) => {
         let logAction = 'escalated';
 
         if (actor.role === 'advisor') {
-            const hod = await findDepartmentHod(complaint.department);
-
-            if (!hod) {
-                return res.status(422).json({
-                    success: false,
-                    message:
-                        'Responsible department HOD not found; cannot return complaint'
-                });
-            }
-
-            nextLevel = 'hod';
-            nextAssignee = hod._id;
-            logAction = 'returned';
+            return res.status(403).json({
+                success: false,
+                message: 'Advisors cannot escalate or return complaints'
+            });
         } else if (actor.role === 'hod') {
             const dean = await findInstitutionalDean();
 
@@ -1553,6 +1800,16 @@ const escalateComplaint = async (req, res) => {
                 return res.status(422).json({
                     success: false,
                     message: 'No active Dean available for escalation'
+                });
+            }
+
+            if (
+                escalateToId &&
+                escalateToId.toString() !== dean._id.toString()
+            ) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'HOD may escalate only to the Dean'
                 });
             }
 
@@ -1568,6 +1825,16 @@ const escalateComplaint = async (req, res) => {
                 });
             }
 
+            if (
+                escalateToId &&
+                escalateToId.toString() !== vc._id.toString()
+            ) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Dean may escalate only to the Vice Chancellor'
+                });
+            }
+
             nextLevel = 'vc';
             nextAssignee = vc._id;
         } else {
@@ -1577,9 +1844,26 @@ const escalateComplaint = async (req, res) => {
             });
         }
 
+        const attachmentResult = resolveActionAttachments(
+            req.body,
+            complaint,
+            actor,
+            logAction,
+            nextAssignee
+        );
+        if (attachmentResult.error) {
+            return res.status(400).json({
+                success: false,
+                message: attachmentResult.error
+            });
+        }
+
         complaint.currentLevel = nextLevel;
         complaint.currentAssignee = nextAssignee;
         complaint.assignedBy = actor._id;
+        if (actor.role === 'hod') {
+            complaint.closureAuthorizedHod = actor._id;
+        }
         complaint.levelDeadline =
             nextLevel === 'hod'
                 ? addTime(DURATIONS.HOD)
@@ -1589,13 +1873,20 @@ const escalateComplaint = async (req, res) => {
         complaint.status = 'escalated';
         await complaint.save();
 
-        await notifyComplaintWatchers(complaint, {
-            actorId: actor._id,
-            extraUserIds: [nextAssignee],
-            title: 'Complaint update',
-            message: complaint.publicId
-                ? `Complaint ${complaint.publicId} "${complaint.title}" was escalated.`
-                : `Complaint "${complaint.title}" was escalated.`
+        await notifyActionRecipients({
+            recipientIds: [nextAssignee],
+            complaint,
+            actor,
+            action: logAction,
+            remarks: escalationRemarks,
+            attachmentCount: attachmentResult.stamped?.length || 0
+        });
+
+        await notifyComplaintTrackingStaff({
+            complaint,
+            actor,
+            action: 'escalated',
+            message: `${actor.name} escalated complaint ${complaint.publicId || ''}.`.trim()
         });
 
         await recordComplaintLog({
@@ -1607,7 +1898,9 @@ const escalateComplaint = async (req, res) => {
             newAssignee: nextAssignee,
             level: nextLevel,
             action: logAction,
-            remarks: escalationReason
+            remarks: escalationRemarks,
+            attachments: attachmentResult.stamped || [],
+            actionRecipient: nextAssignee
         });
 
         res.json({
@@ -1666,6 +1959,14 @@ const resolveComplaint = async (req, res) => {
             });
         }
 
+        if (requiresInitialAcceptance(complaint.status)) {
+            return res.status(403).json({
+                success: false,
+                message:
+                    'Accept the complaint before assigning, escalating, or resolving.'
+            });
+        }
+
         const transition = assertTransition('resolve', complaint.status);
 
         if (!transition.ok) {
@@ -1684,16 +1985,46 @@ const resolveComplaint = async (req, res) => {
 
         const previousStatus = complaint.status;
 
+        const complainantIds = complainantRecipientIds(complaint);
+        const primaryRecipient =
+            complainantIds[0] || recordId(complaint.raisedBy);
+
+        const attachmentResult = resolveActionAttachments(
+            req.body,
+            complaint,
+            actor,
+            'resolved',
+            primaryRecipient
+        );
+        if (attachmentResult.error) {
+            return res.status(400).json({
+                success: false,
+                message: attachmentResult.error
+            });
+        }
+
         complaint.status = 'resolved';
         complaint.resolvedAt = new Date();
+        complaint.resolutionNote = note;
+        complaint.resolvedBy = actor._id;
+        complaint.resolvedByName = actor.name || '';
+        complaint.resolvedByRole = actor.role || '';
         await complaint.save();
 
-        await notifyComplaintWatchers(complaint, {
-            actorId: actor._id,
-            title: 'Complaint update',
-            message: complaint.publicId
-                ? `Your complaint ${complaint.publicId} "${complaint.title}" has been resolved.`
-                : `Your complaint "${complaint.title}" has been resolved.`
+        await notifyActionRecipients({
+            recipientIds: complainantIds,
+            complaint,
+            actor,
+            action: 'resolved',
+            remarks: note,
+            attachmentCount: attachmentResult.stamped?.length || 0
+        });
+
+        await notifyComplaintTrackingStaff({
+            complaint,
+            actor,
+            action: 'resolved',
+            message: `${actor.name} resolved complaint ${complaint.publicId || ''}.`.trim()
         });
 
         await recordComplaintLog({
@@ -1705,7 +2036,9 @@ const resolveComplaint = async (req, res) => {
             newAssignee: complaint.currentAssignee,
             level: complaint.currentLevel,
             action: 'resolved',
-            remarks: note
+            remarks: note,
+            attachments: attachmentResult.stamped || [],
+            actionRecipient: primaryRecipient
         });
 
         res.json({
@@ -1718,13 +2051,189 @@ const resolveComplaint = async (req, res) => {
     }
 };
 
-// ==================== 14. TIMEOUT / ESCALATION BACKGROUND WORKER ====================
+// ==================== 14. CLOSE COMPLAINT (HOD) ====================
+const closeComplaint = async (req, res) => {
+    try {
+        const complaintId = req.params.id || req.body.complaintId;
+        const actor = await loadActor(req.user.id);
+
+        if (!actor?.isActive) {
+            return res.status(403).json({
+                success: false,
+                message: 'Account is inactive'
+            });
+        }
+
+        if (actor.role !== 'hod') {
+            return res.status(403).json({
+                success: false,
+                message: 'Only an authorized HOD can close this complaint'
+            });
+        }
+
+        const complaint = await Complaint.findById(complaintId);
+
+        if (!complaint) {
+            return res.status(404).json({
+                success: false,
+                message: 'Complaint not found'
+            });
+        }
+
+        if (complaint.status === 'closed') {
+            return res.status(400).json({
+                success: false,
+                message: 'Complaint is already closed'
+            });
+        }
+
+        const transition = assertTransition('close', complaint.status);
+        if (!transition.ok) {
+            return res.status(400).json({
+                success: false,
+                message: transition.message
+            });
+        }
+
+        if (!canAuthorizeComplaintClose(complaint, actor)) {
+            return res.status(403).json({
+                success: false,
+                message:
+                    'You are not authorized to close this complaint. Only the HOD who assigned or escalated it may close it.'
+            });
+        }
+
+        const previousStatus = complaint.status;
+        complaint.status = 'closed';
+        complaint.closedAt = new Date();
+        complaint.closedBy = actor._id;
+        complaint.closureType = 'manual';
+        await complaint.save();
+
+        const publicId = complaint.publicId || String(complaint._id);
+
+        await notifyComplaintWatchers(complaint, {
+            actorId: actor._id,
+            title: 'Complaint closed',
+            message: `Complaint ${publicId} was closed by ${actor.name}.`
+        });
+
+        const observerIds = [complaint.currentAssignee, complaint.resolvedBy].filter(
+            Boolean
+        );
+        await notifyActionRecipients({
+            recipientIds: observerIds,
+            complaint,
+            actor,
+            action: 'closed',
+            remarks: 'Complaint workflow completed.'
+        });
+
+        await notifyComplaintTrackingStaff({
+            complaint,
+            actor,
+            action: 'closed',
+            message: `${actor.name} closed complaint ${publicId}.`
+        });
+
+        await recordComplaintLog({
+            complaintId: complaint._id,
+            actor,
+            previousStatus,
+            newStatus: 'closed',
+            previousAssignee: complaint.currentAssignee,
+            newAssignee: complaint.currentAssignee,
+            level: complaint.currentLevel,
+            action: 'closed',
+            remarks: `Complaint ${publicId} closed by ${actor.name}`
+        });
+
+        res.json({
+            success: true,
+            message: 'Complaint closed',
+            complaint
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// ==================== 15. AUTO-CLOSE RESOLVED COMPLAINTS ====================
+const RESOLVED_AUTO_CLOSE_MS = 24 * 60 * 60 * 1000;
+
+const handleResolvedAutoClose = async () => {
+    const cutoff = new Date(Date.now() - RESOLVED_AUTO_CLOSE_MS);
+
+    const candidates = await Complaint.find({
+        status: 'resolved',
+        resolvedAt: { $lte: cutoff }
+    }).select('_id publicId title department currentAssignee currentLevel resolvedBy resolvedAt');
+
+    let closedCount = 0;
+
+    for (const doc of candidates) {
+        const updated = await Complaint.findOneAndUpdate(
+            {
+                _id: doc._id,
+                status: 'resolved',
+                resolvedAt: { $lte: cutoff }
+            },
+            {
+                $set: {
+                    status: 'closed',
+                    closedAt: new Date(),
+                    closureType: 'automatic'
+                }
+            },
+            { new: true }
+        );
+
+        if (!updated) continue;
+        closedCount += 1;
+
+        const publicId = updated.publicId || String(updated._id);
+
+        await recordComplaintLog({
+            complaintId: updated._id,
+            actor: null,
+            previousStatus: 'resolved',
+            newStatus: 'closed',
+            previousAssignee: updated.currentAssignee,
+            newAssignee: updated.currentAssignee,
+            level: updated.currentLevel,
+            action: 'closed',
+            remarks: `Complaint ${publicId} automatically closed 24 hours after resolution`
+        });
+
+        await notifyComplaintWatchers(updated, {
+            title: 'Complaint closed',
+            message: `Complaint ${publicId} was automatically closed after 24 hours.`
+        });
+
+        await notifyComplaintTrackingStaff({
+            complaint: updated,
+            actor: null,
+            action: 'closed',
+            message: `Complaint ${publicId} was automatically closed.`
+        });
+    }
+
+    if (closedCount > 0) {
+        console.log(
+            `Auto-closed ${closedCount} resolved complaint(s) after 24 hours`
+        );
+    }
+
+    return closedCount;
+};
+
+// ==================== 16. TIMEOUT / ESCALATION BACKGROUND WORKER ====================
 const handleTimeouts = async () => {
     const now = new Date();
 
     const expiredComplaints = await Complaint.find({
         levelDeadline: { $lt: now },
-        status: { $nin: ['resolved', 'rejected', 'withdrawn'] }
+        status: { $nin: ['resolved', 'closed', 'rejected', 'withdrawn'] }
     });
 
     for (const complaint of expiredComplaints) {
@@ -1819,6 +2328,7 @@ const handleTimeouts = async () => {
 export {
     getCategories,
     getComplaintDepartments,
+    getComplaintRoutingPreview,
     getPublicComplaintStats,
     createComplaint,
     getComplaints,
@@ -1835,5 +2345,7 @@ export {
     updateComplaintStatus,
     escalateComplaint,
     resolveComplaint,
+    closeComplaint,
+    handleResolvedAutoClose,
     handleTimeouts
 };

@@ -1,8 +1,13 @@
 import express from 'express';
 
 import { createUser } from '../controller/userController.js';
-import { bulkCreateUsers } from '../controller/bulkUserController.js';
 import {
+    bulkCreateUsers,
+    bulkImportValidatedUsers,
+    bulkValidateUsers
+} from '../controller/bulkUserController.js';
+import {
+    deleteUserPermanently,
     exportUsersCsv,
     getUserById,
     getUserStats,
@@ -33,6 +38,7 @@ userManagementRouter.get('/', ...managementChain, listUsers);
 userManagementRouter.get('/:id', ...managementChain, getUserById);
 userManagementRouter.patch('/:id', ...managementChain, updateUser);
 userManagementRouter.patch('/:id/status', ...managementChain, setUserStatus);
+userManagementRouter.delete('/:id', ...managementChain, deleteUserPermanently);
 
 userManagementRouter.post(
     '/',
@@ -40,6 +46,22 @@ userManagementRouter.post(
     requirePasswordChange,
     authorizeUserManagement,
     createUser
+);
+
+userManagementRouter.post(
+    '/bulk/validate',
+    authUser,
+    requirePasswordChange,
+    authorizeUserCreationAccess,
+    bulkValidateUsers
+);
+
+userManagementRouter.post(
+    '/bulk/import',
+    authUser,
+    requirePasswordChange,
+    authorizeUserCreationAccess,
+    bulkImportValidatedUsers
 );
 
 userManagementRouter.post(

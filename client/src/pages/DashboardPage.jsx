@@ -30,9 +30,9 @@ const QUICK_ACTIONS = [
         tone: 'blue'
     },
     {
-        to: '/complaints/categories',
-        label: 'Manage Categories',
-        icon: <IconLayers />,
+        to: '/departments',
+        label: 'Departments',
+        icon: <IconBuilding />,
         tone: 'indigo'
     },
     {

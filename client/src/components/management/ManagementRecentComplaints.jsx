@@ -3,6 +3,7 @@ import { StatusBadge } from '../StatusBadge.jsx';
 import { complaintSubject } from '../../utils/complaintTitle.js';
 import { complaintPublicId } from '../../utils/complaintPublicId.js';
 import { complaintAccessLabel } from '../../utils/complaintAccess.js';
+import { isResolvedLikeStatus } from '../../utils/complaintStatusDisplay.js';
 
 function formatDateTime(value) {
     if (!value) return '—';
@@ -50,8 +51,13 @@ export function ManagementRecentComplaints({
                     </tr>
                 </thead>
                 <tbody>
-                    {complaints.map((row) => (
-                        <tr key={row._id}>
+                    {complaints.map((row) => {
+                        const status = (row.status || '').toLowerCase();
+                        const rowClass = isResolvedLikeStatus(status)
+                            ? 'is-resolved'
+                            : undefined;
+                        return (
+                        <tr key={row._id} className={rowClass}>
                             <td className="mono">{complaintPublicId(row) || '—'}</td>
                             <td className="title-cell">
                                 <Link
@@ -80,7 +86,8 @@ export function ManagementRecentComplaints({
                                 </Link>
                             </td>
                         </tr>
-                    ))}
+                        );
+                    })}
                 </tbody>
             </table>
             {viewAllPath ? (
