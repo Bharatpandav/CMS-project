@@ -2,7 +2,10 @@ import bcryptjs from 'bcryptjs';
 import { parse } from 'csv-parse/sync';
 
 import userModel from '../models/userModel.js';
-import generatePassword from '../utils/generatePassword.js';
+import {
+    buildInitialUserPassword,
+    parseDateOfBirthInput
+} from '../utils/devCredentialPatterns.js';
 import generateCredentialCSV from '../utils/generateCredentialCSV.js';
 import escapeRegExp from '../utils/escapeRegExp.js';
 import { allowedRoles } from '../middleware/authorizeUserManagement.js';
@@ -139,7 +142,8 @@ const bulkCreateUsers = async (req, res) => {
             'department',
             'rollNumber',
             'semester',
-            'section'
+            'section',
+            'dateOfBirth'
         ];
 
         const actualHeaders =
@@ -229,7 +233,8 @@ const bulkCreateUsers = async (req, res) => {
                 department,
                 rollNumber,
                 semester,
-                section
+                section,
+                dateOfBirth
             } = row;
 
             const rowNumber = index + 2;
@@ -443,24 +448,53 @@ const bulkCreateUsers = async (req, res) => {
                 }
             }
 
-            /*
-             * Generate cryptographically secure temporary password
-             */
-            const temporaryPassword =
-                generatePassword();
+            let parsedDateOfBirth = null;
+            if (role !== 'student') {
+                if (!dateOfBirth?.trim()) {
+                    failedUsers.push({
+                        row: rowNumber,
+                        email: normalizedEmail,
+                        reason:
+                            'Staff and admin accounts require dateOfBirth (YYYY-MM-DD)'
+                    });
+                    continue;
+                }
+                parsedDateOfBirth = parseDateOfBirthInput(dateOfBirth);
+                if (!parsedDateOfBirth) {
+                    failedUsers.push({
+                        row: rowNumber,
+                        email: normalizedEmail,
+                        reason: 'Invalid dateOfBirth — use YYYY-MM-DD'
+                    });
+                    continue;
+                }
+            }
 
-            /*
-             * Hash password before storing
-             */
+            let temporaryPassword;
+            try {
+                temporaryPassword = buildInitialUserPassword({
+                    role,
+                    name: name.trim(),
+                    rollNumber: trimmedRoll,
+                    dateOfBirth: parsedDateOfBirth
+                });
+            } catch (passwordError) {
+                failedUsers.push({
+                    row: rowNumber,
+                    email: normalizedEmail,
+                    reason:
+                        passwordError.message ||
+                        'Could not generate initial password'
+                });
+                continue;
+            }
+
             const hashedPassword =
                 await bcryptjs.hash(
                     temporaryPassword,
                     10
                 );
 
-            /*
-             * Create user
-             */
             const user =
                 await userModel.create({
                     name: name.trim(),
@@ -484,6 +518,8 @@ const bulkCreateUsers = async (req, res) => {
                     section:
                         section?.trim() ||
                         undefined,
+
+                    dateOfBirth: parsedDateOfBirth || undefined,
 
                     isFirstLogin: true,
                     isActive: true

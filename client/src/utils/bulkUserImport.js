@@ -8,7 +8,8 @@ export const BULK_USER_HEADERS = [
     'department',
     'rollNumber',
     'semester',
-    'section'
+    'section',
+    'dateOfBirth'
 ];
 
 export const MAX_BULK_FILE_BYTES = 2 * 1024 * 1024;
@@ -163,6 +164,12 @@ export function validateBulkUserRows(rows, actorRole, hodDepartment = '') {
             reasons.push(`${role} accounts require department`);
         }
 
+        if (role && role !== 'student' && !row.dateOfBirth?.trim()) {
+            reasons.push(
+                'Staff and admin accounts require dateOfBirth (YYYY-MM-DD)'
+            );
+        }
+
         if (isHod && role && !['student', 'advisor'].includes(role)) {
             reasons.push('HOD may only import Student or Advisor rows');
         }
@@ -205,8 +212,8 @@ function csvEscape(value) {
 export function downloadBulkTemplate() {
     const sample = [
         BULK_USER_HEADERS.join(','),
-        'Jane Student,jane@example.com,student,Computer Science and Engineering,URN24001,3,A',
-        'Arun Advisor,arun@example.com,advisor,Computer Science and Engineering,,,'
+        'Jane Student,jane@example.com,student,Computer Science and Engineering,23303053,3,A,',
+        'Arun Advisor,arun@example.com,advisor,Computer Science and Engineering,,,,1990-06-15'
     ].join('\n');
     const blob = new Blob([sample], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);

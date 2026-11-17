@@ -32,7 +32,8 @@ export function RegisterUserPage() {
         department: '',
         rollNumber: '',
         semester: '',
-        section: ''
+        section: '',
+        dateOfBirth: ''
     });
     const [result, setResult] = useState(null);
     const [error, setError] = useState('');
@@ -88,7 +89,11 @@ export function RegisterUserPage() {
                 semester: form.semester
                     ? Number(form.semester)
                     : undefined,
-                section: form.section.trim() || undefined
+                section: form.section.trim() || undefined,
+                dateOfBirth:
+                    form.role === 'student'
+                        ? undefined
+                        : form.dateOfBirth.trim() || undefined
             };
 
             if (isHod) {
@@ -220,7 +225,25 @@ export function RegisterUserPage() {
                                 />
                             </label>
                         </>
-                    ) : null}
+                    ) : (
+                        <label>
+                            Date of birth
+                            <input
+                                type="date"
+                                value={form.dateOfBirth}
+                                onChange={update('dateOfBirth')}
+                                required
+                                aria-describedby="dob-password-hint"
+                            />
+                            <span
+                                id="dob-password-hint"
+                                className="field-hint"
+                            >
+                                Initial password: first name plus birth year
+                                (e.g. Arun, 1990 → Arun1990)
+                            </span>
+                        </label>
+                    )}
                 </div>
                 <button
                     type="submit"
@@ -244,8 +267,11 @@ export function RegisterUserPage() {
                         <strong>{result.temporaryPassword}</strong>
                     </p>
                     <p className="hint">
-                        Share credentials securely. The user must change their
-                        password on first login.
+                        Students log in with URN; staff use email. Initial
+                        passwords follow university format (first name + last 4
+                        URN digits, or first name + birth year). Share
+                        credentials securely; the user must change password on
+                        first login.
                     </p>
                 </div>
             ) : null}
