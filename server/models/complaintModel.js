@@ -27,6 +27,7 @@ const studentProfileSnapshotSchema = new mongoose.Schema(
     {
         name: { type: String, required: true },
         email: { type: String, required: true },
+        phone: { type: String, default: '' },
         rollNumber: { type: String, default: '' },
         department: { type: String, default: '' },
         semester: { type: Number, default: null },
@@ -61,6 +62,11 @@ const complaintSchema = new mongoose.Schema(
         },
         department: { type: String, required: true, index: true },
 
+        publicId: {
+            type: String,
+            trim: true,
+            match: /^CID\/\d{1,10}\/\d{2,}$/
+        },
         title: { type: String, required: true, trim: true },
         description: { type: String, required: true, trim: true },
         location: { type: String, trim: true, default: '' },
@@ -101,7 +107,27 @@ const complaintSchema = new mongoose.Schema(
             {
                 url: { type: String, required: true },
                 filename: { type: String, default: '' },
-                fileType: { type: String, default: '' }
+                fileType: { type: String, default: '' },
+                fileSize: { type: Number, default: 0 },
+                source: {
+                    type: String,
+                    enum: ['submission', 'action', ''],
+                    default: ''
+                },
+                action: { type: String, default: '' },
+                uploadedBy: {
+                    type: mongoose.Schema.Types.ObjectId,
+                    ref: 'user',
+                    default: null
+                },
+                uploadedByName: { type: String, default: '' },
+                uploadedAt: { type: Date, default: null },
+                intendedRecipient: {
+                    type: mongoose.Schema.Types.ObjectId,
+                    ref: 'user',
+                    default: null
+                },
+                actionType: { type: String, default: '' }
             }
         ],
 
@@ -134,8 +160,10 @@ const complaintSchema = new mongoose.Schema(
                 'accepted',
                 'rejected',
                 'resolved',
+                'closed',
                 'escalated',
-                'reopened'
+                'reopened',
+                'withdrawn'
             ],
             default: 'submitted',
             index: true
@@ -151,7 +179,33 @@ const complaintSchema = new mongoose.Schema(
 
         Date: { type: Date, required: true },
         undertaking: { type: Boolean, required: true },
-        resolvedAt: { type: Date, default: null }
+        resolvedAt: { type: Date, default: null },
+        resolutionNote: { type: String, trim: true, default: '' },
+        resolvedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'user',
+            default: null
+        },
+        resolvedByName: { type: String, trim: true, default: '' },
+        resolvedByRole: { type: String, trim: true, default: '' },
+        closedAt: { type: Date, default: null },
+        closedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'user',
+            default: null
+        },
+        closureType: {
+            type: String,
+            enum: ['manual', 'automatic', ''],
+            default: ''
+        },
+        closureAuthorizedHod: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'user',
+            default: null
+        },
+        rejectionReasonCode: { type: String, trim: true, default: '' },
+        rejectionReasonText: { type: String, trim: true, default: '' }
     },
     { timestamps: true }
 );
@@ -162,6 +216,13 @@ complaintSchema.index({ currentAssignee: 1, status: 1 });
 complaintSchema.index({ visibility: 1, status: 1 });
 complaintSchema.index({ department: 1, visibility: 1 });
 complaintSchema.index({ 'participants.student': 1 });
+complaintSchema.index(
+    { publicId: 1 },
+    {
+        unique: true,
+        partialFilterExpression: { publicId: { $type: 'string' } }
+    }
+);
 
 const Complaint =
     mongoose.models.Complaint || mongoose.model('Complaint', complaintSchema);

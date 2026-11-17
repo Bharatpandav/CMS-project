@@ -1,5 +1,5 @@
 import { canAccessManagementPortal } from '../utils/managementAccess.js';
-import { UNIFIED_DASHBOARD_PATH } from '../utils/appPaths.js';
+import { getPostLoginDestination, UNIFIED_DASHBOARD_PATH } from '../utils/appPaths.js';
 import { getStaffBasePath, isAdminStaffRole } from '../utils/staffRoles.js';
 
 /**
@@ -14,60 +14,52 @@ export function getPortalNavSections(user) {
             {
                 title: 'Main',
                 items: [
-                    { to: UNIFIED_DASHBOARD_PATH, label: 'Dashboard', end: true },
+                    { to: '/student/dashboard', label: 'Dashboard', end: true },
                     {
                         to: '/student/complaints/register',
                         label: 'Register Complaint'
                     },
                     { to: '/student/complaints', label: 'My Complaints' },
-                    { to: '/student/track', label: 'Track Status' },
-                    { to: '/app/profile', label: 'My Profile' },
-                    { to: '/student/support', label: 'Support' }
+                    {
+                        to: '/student/all-complaints',
+                        label: 'All Complaints'
+                    },
+                    { to: '/app/profile', label: 'My Profile' }
                 ]
             }
         ];
     }
 
+    const dashboardPath =
+        role === 'hod' || role === 'dean' || role === 'super_admin'
+            ? getPostLoginDestination({ role })
+            : UNIFIED_DASHBOARD_PATH;
+
     const sections = [
         {
             title: 'Main',
-            items: [
-                { to: UNIFIED_DASHBOARD_PATH, label: 'Dashboard', end: true }
-            ]
+            items: [{ to: dashboardPath, label: 'Dashboard', end: true }]
         }
     ];
 
     const staffBase = getStaffBasePath(role);
     if (staffBase && isAdminStaffRole(role)) {
-        sections[0].items.push(
-            { to: `${staffBase}/complaints`, label: 'Complaints' },
-            { to: `${staffBase}/categories`, label: 'Categories' }
-        );
-    }
-
-    if (role === 'super_admin') {
-        sections.push({
-            title: 'Administration',
-            items: [
-                { to: '/complaints', label: 'All Complaints' },
-                { to: '/complaints/categories', label: 'Categories' },
-                { to: '/users/register', label: 'Register User' },
-                { to: '/users/bulk', label: 'Bulk Registration' },
-                { to: '/departments', label: 'Departments' }
-            ]
+        sections[0].items.push({
+            to: `${staffBase}/complaints`,
+            label: 'Complaints'
         });
     }
 
     if (canAccessManagementPortal(role)) {
+        const managementItems = [
+            { to: '/management/users', label: 'All Users' },
+            { to: '/management/register', label: 'Register User' },
+            { to: '/management/bulk', label: 'Bulk Import' }
+        ];
+
         sections.push({
             title: 'Management',
-            items: [
-                    { to: '/management/dashboard', label: 'Management Portal' },
-                    { to: '/management/users', label: 'All Users' },
-                { to: '/management/register', label: 'Register User' },
-                { to: '/management/bulk', label: 'Bulk Import' },
-                { to: '/management/import-export', label: 'Import / Export' }
-            ]
+            items: managementItems
         });
     }
 

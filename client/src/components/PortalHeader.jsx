@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { IconBell, IconMenu } from './icons.jsx';
+import { Link, useLocation } from 'react-router-dom';
+import { IconMenu } from './icons.jsx';
+import { NotificationBell } from './NotificationBell.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
-import { UNIFIED_DASHBOARD_PATH, getProfilePath } from '../utils/appPaths.js';
+import { useLogoutToHome } from '../hooks/useLogoutToHome.js';
+import { getPostLoginDestination, getProfilePath } from '../utils/appPaths.js';
 import { getStaffRoleLabel } from '../utils/staffRoles.js';
 
 const ROLE_LABELS = {
@@ -14,8 +16,8 @@ const ROLE_LABELS = {
 };
 
 export function PortalHeader({ onMenuClick, menuOpen = false }) {
-    const { user, logout } = useAuth();
-    const navigate = useNavigate();
+    const { user } = useAuth();
+    const logoutToHome = useLogoutToHome();
     const location = useLocation();
     const [open, setOpen] = useState(false);
     const menuRef = useRef(null);
@@ -31,6 +33,9 @@ export function PortalHeader({ onMenuClick, menuOpen = false }) {
     }, []);
 
     const name = user?.name || 'User';
+    const dashboardPath = user
+        ? getPostLoginDestination(user)
+        : '/app/dashboard';
     const roleLabel =
         ROLE_LABELS[user?.role] ||
         getStaffRoleLabel(user?.role) ||
@@ -50,7 +55,7 @@ export function PortalHeader({ onMenuClick, menuOpen = false }) {
                     <IconMenu />
                 </button>
 
-                <Link to={UNIFIED_DASHBOARD_PATH} className="public-brand">
+                <Link to={dashboardPath} className="public-brand">
                     <span className="public-brand__shield" aria-hidden="true">
                         SB
                     </span>
@@ -62,27 +67,8 @@ export function PortalHeader({ onMenuClick, menuOpen = false }) {
                     </span>
                 </Link>
 
-                <nav className="portal-header__nav" aria-label="Quick links">
-                    <NavLink
-                        to={UNIFIED_DASHBOARD_PATH}
-                        className={({ isActive }) =>
-                            isActive ? 'is-active' : undefined
-                        }
-                    >
-                        Dashboard
-                    </NavLink>
-                </nav>
-
                 <div className="portal-header__actions">
-                    <button
-                        type="button"
-                        className="portal-header__bell"
-                        aria-label="Notifications"
-                        title="Notifications not available yet"
-                        disabled
-                    >
-                        <IconBell />
-                    </button>
+                    <NotificationBell className="public-header__icon-btn" />
 
                     <div className="portal-profile" ref={menuRef}>
                         <button
@@ -118,8 +104,7 @@ export function PortalHeader({ onMenuClick, menuOpen = false }) {
                                     type="button"
                                     onClick={async () => {
                                         setOpen(false);
-                                        await logout();
-                                        navigate('/');
+                                        await logoutToHome();
                                     }}
                                 >
                                     Logout

@@ -1,4 +1,5 @@
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
+import { useLogoutToHome } from '../hooks/useLogoutToHome.js';
 import {
     IconBuilding,
     IconClipboard,
@@ -27,13 +28,12 @@ function NavItem({ to, icon, label, end, onNavigate }) {
 }
 
 export function ManagementSidebar({ mobileOpen, onClose }) {
-    const { logout, user } = useAuth();
-    const navigate = useNavigate();
+    const { user } = useAuth();
+    const logoutToHome = useLogoutToHome();
     const isSuperAdmin = user?.role === 'super_admin';
 
     const handleLogout = async () => {
-        await logout();
-        navigate('/', { replace: true });
+        await logoutToHome();
     };
 
     const closeMobile = () => onClose?.();
@@ -61,11 +61,17 @@ export function ManagementSidebar({ mobileOpen, onClose }) {
                     <NavItem to="/management/bulk" icon={<IconUpload />} label="Bulk Registration" onNavigate={closeMobile} />
                     <NavItem to="/management/users?role=student" icon={<IconUsers />} label="Students" onNavigate={closeMobile} />
                     <NavItem to="/management/users?role=staff" icon={<IconUsers />} label="Administrators & Staff" onNavigate={closeMobile} />
-                    <NavItem to="/management/departments" icon={<IconBuilding />} label="Departments" onNavigate={closeMobile} />
+                    {isSuperAdmin ? null : (
+                        <NavItem
+                            to="/management/departments"
+                            icon={<IconBuilding />}
+                            label="Departments"
+                            onNavigate={closeMobile}
+                        />
+                    )}
                     {isSuperAdmin ? (
                         <NavItem to="/management/roles" icon={<IconClipboard />} label="Roles & Permissions" onNavigate={closeMobile} />
                     ) : null}
-                    <NavItem to="/management/import-export" icon={<IconUpload />} label="Import / Export" onNavigate={closeMobile} />
                 </nav>
                 <button type="button" className="sidebar__logout" onClick={handleLogout}>
                     <IconLogout />

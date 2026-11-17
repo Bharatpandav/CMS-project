@@ -1,0 +1,233 @@
+.ui-dialog-backdrop.attachment-preview-backdrop {
+    z-index: var(--z-attachment-preview-backdrop, 1400);
+    background: rgba(8, 22, 40, 0.82);
+    backdrop-filter: blur(2px);
+    isolation: isolate;
+}
+
+.ui-dialog.attachment-preview {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    width: min(960px, calc(100vw - 2rem));
+    max-height: calc(100vh - 2rem);
+    padding: 2.5rem 1rem 1rem;
+    overflow: auto;
+    background: #fff;
+    color: #0f2744;
+    border: 1px solid #d5e0ee;
+    border-radius: 14px;
+    box-shadow: 0 32px 80px rgba(8, 22, 40, 0.38);
+}
+
+.attachment-preview__title {
+    margin: 0 2.2rem 0.75rem 0.15rem;
+    font-size: 0.95rem;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+    flex-shrink: 0;
+}
+
+.attachment-preview__body {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.attachment-preview__image {
+    display: block;
+    width: 100%;
+    max-height: calc(100vh - 9rem);
+    object-fit: contain;
+    background: #f4f7fb;
+    border-radius: 8px;
+}
+
+.attachment-preview__pdf {
+    display: block;
+    width: 100%;
+    height: min(72vh, 720px);
+    border: 1px solid #d5deea;
+    border-radius: 8px;
+    background: #f8fafc;
+}
+
+.attachment-preview__fallback {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 2rem 1.25rem;
+    text-align: center;
+    color: #475569;
+    background: #f8fafc;
+    border: 1px dashed #cbd5e1;
+    border-radius: 10px;
+}
+
+.attachment-preview__fallback p {
+    margin: 0;
+    max-width: 28rem;
+    font-size: 0.92rem;
+    line-height: 1.5;
+}
+
+.attachment-preview__download {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.45rem 0.85rem;
+    border-radius: 8px;
+    background: #1769aa;
+    color: #fff;
+    font-size: 0.88rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.attachment-preview__download--inline {
+    align-self: flex-start;
+    margin-top: 0.65rem;
+    background: #f1f5f9;
+    color: #0f2744;
+    border: 1px solid #cbd5e1;
+}
+
+.attachment-preview .ui-dialog__close {
+    color: #0f2744;
+    background: #f3f6fb;
+}
+
+.attach-file-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+}
+
+.attach-file-list--compact .attach-file {
+    padding: 0.45rem 0.5rem;
+}
+
+.attach-file {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.55rem 0.65rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #fff;
+}
+
+.attach-file__thumb {
+    display: grid;
+    place-items: center;
+    width: 52px;
+    height: 52px;
+    padding: 0;
+    border: 1px solid #d5deea;
+    border-radius: 8px;
+    background: #f8fafc;
+    cursor: pointer;
+    overflow: hidden;
+}
+
+.attach-file__thumb--image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.attach-file__thumb--pdf {
+    color: #b91c1c;
+    gap: 0.1rem;
+}
+
+.attach-file__pdf-mark {
+    font-size: 0.62rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+}
+
+.attach-file__thumb--word,
+.attach-file__thumb--excel,
+.attach-file__thumb--document {
+    color: #1769aa;
+}
+
+.attach-file__thumb--static {
+    cursor: default;
+    color: #64748b;
+}
+
+.attach-file__body {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+}
+
+.attach-file__name {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #0f2744;
+    overflow-wrap: anywhere;
+}
+
+.attach-file__meta {
+    font-size: 0.8rem;
+    color: #64748b;
+}
+
+.attach-file__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.35rem 0.55rem;
+}
+
+.attach-file__link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #1769aa;
+    text-decoration: none;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+}
+
+.attach-file__link:hover {
+    text-decoration: underline;
+}
+
+.attach-file__remove {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #b91c1c;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+}
+
+@media (max-width: 560px) {
+    .attach-file {
+        grid-template-columns: auto 1fr;
+        grid-template-rows: auto auto;
+    }
+
+    .attach-file__actions {
+        grid-column: 1 / -1;
+        justify-content: flex-start;
+    }
+}

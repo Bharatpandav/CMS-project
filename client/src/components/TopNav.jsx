@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import {
     IconBell,
     IconChevronDown,
@@ -7,6 +7,7 @@ import {
     IconSearch
 } from './icons.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useLogoutToHome } from '../hooks/useLogoutToHome.js';
 
 const ROLE_LABELS = {
     super_admin: 'Super Admin',
@@ -17,8 +18,8 @@ const ROLE_LABELS = {
 };
 
 export function TopNav({ onMenuClick, search, onSearchChange }) {
-    const { user, logout } = useAuth();
-    const navigate = useNavigate();
+    const { user } = useAuth();
+    const logoutToHome = useLogoutToHome();
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const dropdownRef = useRef(null);
 
@@ -101,8 +102,7 @@ export function TopNav({ onMenuClick, search, onSearchChange }) {
                                 type="button"
                                 onClick={async () => {
                                     setDropdownOpen(false);
-                                    await logout();
-                                    navigate('/');
+                                    await logoutToHome();
                                 }}
                             >
                                 Logout

@@ -1,0 +1,41 @@
+.image-preview-backdrop {
+    z-index: 1200;
+    background: rgba(8, 22, 40, 0.78);
+}
+
+.ui-dialog.image-preview {
+    width: min(960px, calc(100vw - 2rem));
+    max-height: calc(100vh - 2rem);
+    padding: 2.6rem 1rem 1rem;
+    background: #fff;
+    color: #0f2744;
+    border: none;
+    border-radius: 14px;
+}
+
+.image-preview__title {
+    margin: 0 2.2rem 0.75rem 0.15rem;
+    font-size: 0.95rem;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+}
+
+.image-preview img {
+    display: block;
+    width: 100%;
+    max-height: calc(100vh - 7.5rem);
+    object-fit: contain;
+    background: #f4f7fb;
+    border-radius: 8px;
+}
+
+.image-preview .ui-dialog__close {
+    color: #0f2744;
+    background: #f3f6fb;
+}
+
+@media print {
+    .image-preview-backdrop {
+        display: none !important;
+    }
+}

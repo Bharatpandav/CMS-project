@@ -8,7 +8,7 @@ export function StaffRouteGuard({ expectedRole, children }) {
     if (!user?.role || user.role !== expectedRole) {
         return (
             <Navigate
-                to={user ? getRoleDashboardPath(user) : '/?login=1'}
+                to={user ? getRoleDashboardPath(user) : '/'}
                 replace
             />
         );

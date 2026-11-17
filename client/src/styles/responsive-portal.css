@@ -10,6 +10,8 @@
     --z-nav-drawer: 100;
     --z-modal-backdrop: 200;
     --z-modal: 210;
+    --z-staff-action-modal: 1250;
+    --z-attachment-preview-backdrop: 1400;
 }
 
 /* —— Off-canvas drawer (portal) —— */

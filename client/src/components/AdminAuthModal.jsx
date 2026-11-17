@@ -1,12 +1,17 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { resolvePostLoginPath } from '../utils/navigationPaths.js';
+import {
+    getRoleDashboardPath,
+    resolvePostLoginPath
+} from '../utils/navigationPaths.js';
 import { PasswordField } from './PasswordField.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { getPostLoginPath } from '../utils/roleRedirect.js';
 import { isAdminStaffRole } from '../utils/staffRoles.js';
 import { canAccessManagementPortal } from '../utils/managementAccess.js';
 import { getManagementPostLoginPath } from '../utils/managementAccess.js';
+import { validateEmail } from '../utils/emailValidation.js';
+import { ForgotPasswordDialog } from './ForgotPasswordDialog.jsx';
 
 function IconShield() {
     return (
@@ -29,6 +34,7 @@ export function AdminAuthModal({ open, onClose, initialMode = 'admin' }) {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [forgotOpen, setForgotOpen] = useState(false);
 
     const resetSensitive = () => {
         setPassword('');
@@ -75,13 +81,20 @@ export function AdminAuthModal({ open, onClose, initialMode = 'admin' }) {
     const submit = async (e) => {
         e.preventDefault();
         setError('');
-        if (!identifier.trim() || !password) {
-            setError('Email and password are required');
+        const emailCheck = validateEmail(identifier);
+        if (!emailCheck.ok) {
+            setError(emailCheck.message);
+            return;
+        }
+        if (!password) {
+            setError('Password is required');
             return;
         }
         setLoading(true);
         try {
-            const data = await login(identifier.trim(), password);
+            const data = await login(emailCheck.email, password, {
+                loginChannel: 'staff'
+            });
             const role = data.user?.role;
 
             if (role === 'student') {
@@ -100,10 +113,9 @@ export function AdminAuthModal({ open, onClose, initialMode = 'admin' }) {
                     );
                     return;
                 }
+                const mgmtDest = getManagementPostLoginPath(data.user);
+                navigate(mgmtDest, { replace: true, state: null });
                 handleClose();
-                navigate(getManagementPostLoginPath(data.user), {
-                    replace: true
-                });
                 return;
             }
 
@@ -113,13 +125,15 @@ export function AdminAuthModal({ open, onClose, initialMode = 'admin' }) {
                 return;
             }
 
-            handleClose();
-            navigate(
-                resolvePostLoginPath(data.user, location.state?.from, {
-                    dashboardFallback: getPostLoginPath(data.user)
-                }),
-                { replace: true }
+            const dashboard =
+                getRoleDashboardPath(data.user) || getPostLoginPath(data.user);
+            const dest = resolvePostLoginPath(
+                data.user,
+                location.state?.from,
+                { dashboardFallback: dashboard }
             );
+            navigate(dest, { replace: true, state: null });
+            handleClose();
         } catch (err) {
             setError(err.message || 'Invalid credentials');
         } finally {
@@ -173,10 +187,21 @@ export function AdminAuthModal({ open, onClose, initialMode = 'admin' }) {
                         autoComplete="current-password"
                         disabled={loading}
                     />
+                    <button
+                        type="button"
+                        className="login-modal__forgot link-teal"
+                        onClick={() => setForgotOpen(true)}
+                    >
+                        Forgot password?
+                    </button>
                     <button type="submit" className="login-modal__submit" disabled={loading}>
                         {loading ? 'Signing in…' : 'Login'}
                     </button>
                 </form>
+                <ForgotPasswordDialog
+                    open={forgotOpen}
+                    onClose={() => setForgotOpen(false)}
+                />
 
                 {!isManagement ? (
                     <div className="admin-auth-switch">

@@ -5,6 +5,9 @@ import { getStaffBasePath, isAdminStaffRole } from './staffRoles.js';
 
 const MANAGEMENT_PORTAL_PREFIX = '/management';
 
+/** Public entry paths — after login, prefer the role dashboard instead. */
+const POST_LOGIN_IGNORE_PATHS = new Set(['/', '/reset-password']);
+
 /**
  * Reject external / protocol-relative URLs (open redirect).
  */
@@ -26,9 +29,10 @@ export function resolveComplaintsListPath(role, pathname = '') {
 export function getRoleDashboardPath(user) {
     if (!user) return '/';
     if (user.isFirstLogin) return '/change-password';
-    if (canAccessManagementPortal(user.role)) {
-        return '/management/dashboard';
-    }
+    if (user.role === 'hod') return '/hod/dashboard';
+    if (user.role === 'dean') return '/dean/dashboard';
+    if (user.role === 'super_admin') return '/vc/dashboard';
+    if (user.role === 'student') return '/student/dashboard';
     return UNIFIED_DASHBOARD_PATH;
 }
 
@@ -42,7 +46,10 @@ export function canUserAccessPath(user, pathname) {
 
     if (path === '/' || path === '/change-password') return true;
 
-    if (path.startsWith(MANAGEMENT_PORTAL_PREFIX)) {
+    if (
+        path.startsWith(MANAGEMENT_PORTAL_PREFIX) ||
+        path.startsWith('/users')
+    ) {
         return canAccessManagementPortal(user.role);
     }
 
@@ -55,10 +62,12 @@ export function canUserAccessPath(user, pathname) {
         return isAdminStaffRole(user.role);
     }
 
+    if (path.startsWith('/management/departments') || path === '/departments') {
+        return ['dean', 'hod', 'advisor'].includes(user.role);
+    }
+
     if (
         path.startsWith('/complaints') ||
-        path.startsWith('/users') ||
-        path.startsWith('/departments') ||
         path.startsWith('/audit-logs') ||
         path.startsWith('/settings')
     ) {
@@ -81,13 +90,16 @@ export function resolvePostLoginPath(
     { dashboardFallback } = {}
 ) {
     const fallback = dashboardFallback ?? getRoleDashboardPath(user);
-    if (!fromLocation?.pathname) return fallback;
+    const pathname = fromLocation?.pathname;
 
-    const target =
-        fromLocation.pathname + (fromLocation.search || '');
+    if (!pathname || POST_LOGIN_IGNORE_PATHS.has(pathname)) {
+        return fallback;
+    }
+
+    const target = pathname + (fromLocation.search || '');
 
     if (!isSafeInternalPath(target)) return fallback;
-    if (!canUserAccessPath(user, fromLocation.pathname)) return fallback;
+    if (!canUserAccessPath(user, pathname)) return fallback;
 
     return target;
 }

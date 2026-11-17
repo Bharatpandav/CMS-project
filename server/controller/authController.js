@@ -1,11 +1,18 @@
+import crypto from 'crypto';
 import bcryptjs from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import userModel from '../models/userModel.js';
 import escapeRegExp from '../utils/escapeRegExp.js';
+import { validateStudentUrn } from '../utils/urnValidation.js';
+import { validateEmailAddress } from '../utils/emailValidation.js';
+import { validatePhone } from '../utils/phoneValidation.js';
+import { rateLimit } from '../utils/rateLimit.js';
+import { getEmailConfigError, sendMail } from '../utils/emailService.js';
 
 const PROTECTED_PROFILE_FIELDS = [
     'name',
     'email',
+    'phone',
     'role',
     'department',
     'rollNumber',
@@ -27,6 +34,7 @@ const createToken = (id, role) => {
 // ==================== LOGIN ====================
 const loginUser = async (req, res) => {
     try {
+        const loginChannel = req.body.loginChannel || 'auto';
         const identifier = (
             req.body.identifier ||
             req.body.rollNumber ||
@@ -40,23 +48,58 @@ const loginUser = async (req, res) => {
         if (!identifier || !password) {
             return res.status(400).json({
                 success: false,
-                message: 'Login identifier (email or student roll number / URN) and password are required'
+                message: 'Login identifier and password are required'
             });
         }
 
-        // Find pre-registered user
-        // If identifier contains '@', query by email; otherwise query by student rollNumber
         let user;
-        if (identifier.includes('@')) {
-            user = await userModel.findOne({
-                email: identifier.toLowerCase()
-            });
-        } else {
-            // Case-insensitive lookup by student rollNumber / URN
+
+        if (loginChannel === 'student') {
+            const urnCheck = validateStudentUrn(identifier);
+            if (!urnCheck.ok) {
+                return res.status(400).json({
+                    success: false,
+                    message: urnCheck.message
+                });
+            }
             user = await userModel.findOne({
                 rollNumber: {
                     $regex: new RegExp(
-                        `^${escapeRegExp(identifier)}$`,
+                        `^${escapeRegExp(urnCheck.urn)}$`,
+                        'i'
+                    )
+                }
+            });
+        } else if (loginChannel === 'staff') {
+            const emailCheck = validateEmailAddress(identifier);
+            if (!emailCheck.ok) {
+                return res.status(400).json({
+                    success: false,
+                    message: emailCheck.message
+                });
+            }
+            user = await userModel.findOne({ email: emailCheck.email });
+        } else if (identifier.includes('@')) {
+            const emailCheck = validateEmailAddress(identifier);
+            if (!emailCheck.ok) {
+                return res.status(400).json({
+                    success: false,
+                    message: emailCheck.message
+                });
+            }
+            user = await userModel.findOne({ email: emailCheck.email });
+        } else {
+            const urnCheck = validateStudentUrn(identifier);
+            if (!urnCheck.ok) {
+                return res.status(400).json({
+                    success: false,
+                    message: urnCheck.message
+                });
+            }
+            user = await userModel.findOne({
+                rollNumber: {
+                    $regex: new RegExp(
+                        `^${escapeRegExp(urnCheck.urn)}$`,
                         'i'
                     )
                 }
@@ -116,6 +159,7 @@ const loginUser = async (req, res) => {
                 role: user.role,
                 rollNumber: user.rollNumber || undefined,
                 department: user.department || undefined,
+                phone: user.phone || undefined,
                 loginIdentifier,
                 isFirstLogin: user.isFirstLogin
             }
@@ -170,6 +214,7 @@ const getCurrentUser = async (req, res) => {
                 programme: user.programme || undefined,
                 assignedAdvisor: user.assignedAdvisor || undefined,
                 dateOfBirth: user.dateOfBirth || undefined,
+                phone: user.phone || undefined,
                 loginIdentifier,
                 isFirstLogin: user.isFirstLogin,
                 isActive: user.isActive
@@ -337,4 +382,189 @@ const logoutUser = (req, res) => {
     }
 };
 
-export { loginUser, getCurrentUser, changePassword, logoutUser };
+const SELF_SERVICE_PROFILE_MESSAGE =
+    'Name, email, and phone are managed by the university and cannot be changed here. You may only change your password.';
+
+const updateProfile = async (req, res) => {
+    try {
+        const { email, phone, name } = req.body || {};
+        const attemptedChange =
+            email !== undefined || phone !== undefined || name !== undefined;
+
+        if (attemptedChange) {
+            return res.status(403).json({
+                success: false,
+                message: SELF_SERVICE_PROFILE_MESSAGE
+            });
+        }
+
+        return res.status(400).json({
+            success: false,
+            message: 'No profile fields can be updated on this account'
+        });
+    } catch (error) {
+        console.error('Update profile error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error'
+        });
+    }
+};
+
+const GENERIC_RESET_MESSAGE =
+    'If an account exists for that email, password reset instructions have been sent.';
+
+const forgotPassword = async (req, res) => {
+    try {
+        const ip = req.ip || 'unknown';
+        if (!rateLimit(`forgot:${ip}`, { windowMs: 15 * 60 * 1000, max: 10 })) {
+            return res.status(429).json({
+                success: false,
+                message: 'Too many requests. Try again later.'
+            });
+        }
+
+        const emailCheck = validateEmailAddress(req.body.email);
+        if (!emailCheck.ok) {
+            return res.status(400).json({
+                success: false,
+                message: emailCheck.message
+            });
+        }
+
+        const configError = getEmailConfigError();
+        if (configError) {
+            return res.status(503).json({
+                success: false,
+                message: configError
+            });
+        }
+
+        const user = await userModel
+            .findOne({ email: emailCheck.email })
+            .select('+passwordResetTokenHash +passwordResetExpires');
+
+        if (user?.isActive) {
+            const rawToken = crypto.randomBytes(32).toString('hex');
+            const tokenHash = crypto
+                .createHash('sha256')
+                .update(rawToken)
+                .digest('hex');
+            user.passwordResetTokenHash = tokenHash;
+            user.passwordResetExpires = new Date(Date.now() + 60 * 60 * 1000);
+            await user.save();
+
+            const base =
+                process.env.CLIENT_URL ||
+                process.env.APP_URL ||
+                'http://localhost:5173';
+            const resetUrl = `${base.replace(/\/$/, '')}/reset-password?token=${rawToken}`;
+
+            await sendMail({
+                to: user.email,
+                subject: 'UCMS password reset',
+                text: `Use this link to reset your password (valid for 1 hour): ${resetUrl}`,
+                html: `<p>Use this link to reset your password (valid for 1 hour):</p><p><a href="${resetUrl}">${resetUrl}</a></p>`
+            });
+        }
+
+        return res.json({
+            success: true,
+            message: GENERIC_RESET_MESSAGE
+        });
+    } catch (error) {
+        console.error('Forgot password error:', error);
+        if (error.code === 'EMAIL_NOT_CONFIGURED') {
+            return res.status(503).json({
+                success: false,
+                message: error.message
+            });
+        }
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error'
+        });
+    }
+};
+
+const resetPasswordWithToken = async (req, res) => {
+    try {
+        const { token, newPassword } = req.body;
+        if (!token || !newPassword) {
+            return res.status(400).json({
+                success: false,
+                message: 'Token and new password are required'
+            });
+        }
+
+        if (newPassword.length < 8) {
+            return res.status(400).json({
+                success: false,
+                message: 'New password must be at least 8 characters long'
+            });
+        }
+
+        const complexityRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/;
+        if (!complexityRegex.test(newPassword)) {
+            return res.status(400).json({
+                success: false,
+                message:
+                    'New password must contain at least one uppercase letter, one lowercase letter, and one number'
+            });
+        }
+
+        const tokenHash = crypto
+            .createHash('sha256')
+            .update(String(token))
+            .digest('hex');
+
+        const user = await userModel
+            .findOne({
+                passwordResetTokenHash: tokenHash,
+                passwordResetExpires: { $gt: new Date() }
+            })
+            .select('+passwordResetTokenHash +passwordResetExpires');
+
+        if (!user) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid or expired reset link'
+            });
+        }
+
+        const salt = await bcryptjs.genSalt(10);
+        user.password = await bcryptjs.hash(newPassword, salt);
+        user.passwordResetTokenHash = null;
+        user.passwordResetExpires = null;
+        user.isFirstLogin = false;
+        await user.save();
+
+        res.clearCookie('token', {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict'
+        });
+
+        return res.json({
+            success: true,
+            message:
+                'Password reset successfully. You can log in with your new password.'
+        });
+    } catch (error) {
+        console.error('Reset password error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error'
+        });
+    }
+};
+
+export {
+    loginUser,
+    getCurrentUser,
+    changePassword,
+    logoutUser,
+    updateProfile,
+    forgotPassword,
+    resetPasswordWithToken
+};

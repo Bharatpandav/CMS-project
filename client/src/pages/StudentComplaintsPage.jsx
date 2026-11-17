@@ -1,27 +1,40 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { PageHeader } from '../components/PageHeader.jsx';
 import { RecentComplaintsTable } from '../components/RecentComplaintsTable.jsx';
 import { useComplaintsData } from '../hooks/useComplaintsData.js';
 import { useListUiRestore } from '../hooks/useListUiRestore.js';
 
-export function StudentComplaintsPage({ title = 'My Complaints' }) {
+export function StudentComplaintsPage({
+    title = 'My Complaints',
+    scope = 'mine'
+}) {
     const location = useLocation();
-    const listStateKey = location.pathname;
+    const [searchParams] = useSearchParams();
+    const listStateKey = location.pathname + location.search;
+    const isPublic = scope === 'public';
+    const status = isPublic ? undefined : searchParams.get('status') || undefined;
     useListUiRestore(listStateKey);
     const { complaints, loading, error, reload } = useComplaintsData({
         limit: 50,
-        myComplaints: 'true'
+        myComplaints: isPublic ? undefined : true,
+        raisedOnly: isPublic ? undefined : true,
+        publicFeed: isPublic,
+        status
     });
 
     return (
         <div className="page-stack">
             <PageHeader
                 breadcrumbs={[
-                    { to: '/app/dashboard', label: 'Dashboard' },
+                    { to: '/student/dashboard', label: 'Dashboard' },
                     { label: title }
                 ]}
                 title={title}
-                description="Complaints you have raised or joined."
+                description={
+                    isPublic
+                        ? 'Latest public complaints across the university. Private complaints are not included.'
+                        : 'Complaints you have raised or joined.'
+                }
             />
 
             {error ? (
@@ -38,6 +51,8 @@ export function StudentComplaintsPage({ title = 'My Complaints' }) {
                     <RecentComplaintsTable
                         complaints={complaints}
                         showViewAll={false}
+                        complaintDetailBase="/student/complaints"
+                        listStateKey={listStateKey}
                     />
                 )}
             </article>
@@ -47,10 +62,6 @@ export function StudentComplaintsPage({ title = 'My Complaints' }) {
                     className="link-teal"
                 >
                     Register a new complaint
-                </Link>
-                {' · '}
-                <Link to="/student/support" className="link-teal">
-                    Support
                 </Link>
             </p>
         </div>

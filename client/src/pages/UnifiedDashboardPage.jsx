@@ -1,42 +1,47 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, Navigate } from 'react-router-dom';
 import { SummaryCard } from '../components/SummaryCard.jsx';
 import { RecentComplaintsTable } from '../components/RecentComplaintsTable.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
-import { useComplaintsData, useCategoriesData } from '../hooks/useComplaintsData.js';
+import { useComplaintsData } from '../hooks/useComplaintsData.js';
 import { managementApi } from '../api/client.js';
 import { canAccessManagementPortal } from '../utils/managementAccess.js';
 import {
     getComplaintsListPath,
-    getManagementHomePath,
-    getRegisterComplaintPath
+    getManagementHomePath
 } from '../utils/appPaths.js';
 import { computeComplaintStats } from '../utils/complaintStats.js';
 import { getStaffBasePath, getStaffRoleLabel } from '../utils/staffRoles.js';
 import { AppIcon } from '../components/AppIcon.jsx';
 import { PageHeader } from '../components/PageHeader.jsx';
+import { useDashboardUserStatsSync } from '../hooks/useDashboardUserStatsSync.js';
+import { DashboardHowItWorks } from '../components/DashboardHowItWorks.jsx';
+import { getDashboardHowItWorksSteps } from '../config/dashboardHowItWorksSteps.jsx';
 
 function useManagementStats(enabled) {
     const [stats, setStats] = useState(null);
     const [error, setError] = useState('');
 
-    useEffect(() => {
+    const load = useCallback(async ({ silent = false } = {}) => {
         if (!enabled) return;
-        let cancelled = false;
-        (async () => {
-            try {
-                const data = await managementApi.getStats();
-                if (!cancelled) setStats(data.stats);
-            } catch (err) {
-                if (!cancelled) setError(err.message || 'Failed to load user stats');
+        try {
+            const data = await managementApi.getStats();
+            setStats(data.stats);
+            if (!silent) setError('');
+        } catch (err) {
+            if (!silent) {
+                setError(err.message || 'Failed to load user stats');
             }
-        })();
-        return () => {
-            cancelled = true;
-        };
+        }
     }, [enabled]);
 
-    return { stats, error };
+    useEffect(() => {
+        load();
+    }, [load]);
+
+    useDashboardUserStatsSync(() => load({ silent: true }), enabled);
+
+    return { stats, error, reload: load };
 }
 
 function buildQuickActions(role) {
@@ -50,17 +55,10 @@ function buildQuickActions(role) {
                 tone: 'neutral'
             },
             {
-                title: 'Track Status',
-                text: 'Stay updated on the progress of your complaint.',
-                to: '/student/complaints',
+                title: 'All Complaints',
+                text: 'Browse the latest public complaints across the university.',
+                to: '/student/all-complaints',
                 iconKey: 'activity',
-                tone: 'neutral'
-            },
-            {
-                title: 'Support',
-                text: 'Get help with categories, access, or the complaint process.',
-                to: '/student/support',
-                iconKey: 'life-buoy',
                 tone: 'neutral'
             },
             {
@@ -73,6 +71,8 @@ function buildQuickActions(role) {
         ];
     }
 
+    // HOD has its own dedicated dashboard — quick actions there are department-focused.
+    // For non-HOD staff (advisor, dean, super_admin) use the generic staff actions.
     const base = getStaffBasePath(role);
     const actions = [
         {
@@ -80,13 +80,6 @@ function buildQuickActions(role) {
             text: 'Review and act on complaints in your scope.',
             to: base ? `${base}/complaints` : '/complaints',
             iconKey: 'clipboard-list',
-            tone: 'neutral'
-        },
-        {
-            title: 'Categories',
-            text: 'View complaint categories and routing.',
-            to: base ? `${base}/categories` : '/complaints/categories',
-            iconKey: 'tags',
             tone: 'neutral'
         }
     ];
@@ -103,10 +96,10 @@ function buildQuickActions(role) {
     }
 
     actions.push({
-        title: 'Password',
-        text: 'Update your password and account security.',
-        to: '/change-password',
-        iconKey: 'lock',
+        title: 'My Profile',
+        text: 'View your details and update your password.',
+        to: '/app/profile',
+        iconKey: 'user',
         tone: 'neutral'
     });
 
@@ -117,6 +110,11 @@ export function UnifiedDashboardPage() {
     const { user } = useAuth();
     const role = user?.role;
     const isStudent = role === 'student';
+
+    useEffect(() => {
+        document.title = 'Dashboard | SBSSU CMS';
+    }, []);
+
     const showMgmtStats = canAccessManagementPortal(role);
 
     const {
@@ -130,7 +128,17 @@ export function UnifiedDashboardPage() {
         myComplaints: isStudent
     });
 
-    const { departments, loading: deptLoading } = useCategoriesData();
+    const {
+        complaints: publicComplaints,
+        loading: publicLoading,
+        error: publicError,
+        reload: reloadPublic
+    } = useComplaintsData({
+        limit: 8,
+        publicFeed: isStudent,
+        myComplaints: isStudent ? undefined : true
+    });
+
     const { stats: userStats, error: userStatsError } =
         useManagementStats(showMgmtStats);
 
@@ -144,13 +152,29 @@ export function UnifiedDashboardPage() {
         [role]
     );
 
+    if (role === 'student') {
+        return <Navigate to="/student/dashboard" replace />;
+    }
+
+    // HODs have a dedicated department-scoped dashboard
+    if (role === 'hod') {
+        return <Navigate to="/hod/dashboard" replace />;
+    }
+
+    if (role === 'super_admin') {
+        return <Navigate to="/vc/dashboard" replace />;
+    }
+
+    if (role === 'dean') {
+        return <Navigate to="/dean/dashboard" replace />;
+    }
+
     const roleLabel = isStudent
         ? 'Student'
         : getStaffRoleLabel(role) || 'Portal';
 
     const firstName = (user?.name || 'there').split(/\s+/)[0];
     const listPath = getComplaintsListPath(role);
-    const registerPath = getRegisterComplaintPath(role);
 
     return (
         <div className="unified-dashboard page-stack">
@@ -221,19 +245,6 @@ export function UnifiedDashboardPage() {
                 />
             </section>
 
-            <section
-                className="summary-grid summary-grid--compact"
-                aria-label="Directory metrics"
-            >
-                <SummaryCard
-                    accent="teal"
-                    label="Service departments"
-                    value={deptLoading ? '…' : String(departments.length)}
-                    hint="Categories available for routing complaints"
-                    icon={<AppIcon name="building" />}
-                />
-            </section>
-
             {!isStudent && role !== 'advisor' ? (
                 <section className="summary-grid summary-grid--compact">
                     <SummaryCard
@@ -249,78 +260,78 @@ export function UnifiedDashboardPage() {
                 <section className="summary-grid summary-grid--compact">
                     <SummaryCard
                         accent="teal"
-                        label="Students"
-                        value={String(userStats.totalStudents ?? '—')}
+                        label="Active Students"
+                        value={String(
+                            userStats.activeStudents ??
+                                userStats.totalStudents ??
+                                '\u2014'
+                        )}
                         icon={<AppIcon name="graduation-cap" />}
                     />
                     <SummaryCard
                         accent="indigo"
-                        label="Staff accounts"
-                        value={String(userStats.totalStaff ?? '—')}
+                        label="Active Staff"
+                        value={String(
+                            userStats.activeStaff ??
+                                userStats.totalStaff ??
+                                '\u2014'
+                        )}
                         icon={<AppIcon name="users" />}
                     />
-                    <SummaryCard
-                        accent="navy"
-                        label="Active accounts"
-                        value={String(userStats.activeAccounts ?? '—')}
-                        icon={<AppIcon name="circle-check" />}
-                    />
+                    {/* Active accounts: only shown to super_admin / dean — not HOD (they have dept-specific counts on their own dashboard) */}
+                    {role !== 'hod' ? (
+                        <SummaryCard
+                            accent="navy"
+                            label="Active accounts"
+                            value={String(userStats.activeAccounts ?? '\u2014')}
+                            icon={<AppIcon name="circle-check" />}
+                        />
+                    ) : null}
                 </section>
             ) : null}
 
             <article className="panel panel--table">
                 <div className="panel__header">
                     <h2>Recent complaints</h2>
-                    <Link to={listPath} className="link-teal">
+                    <Link
+                        to={
+                            isStudent
+                                ? '/student/all-complaints'
+                                : listPath
+                        }
+                        className="link-teal"
+                    >
                         View all
                     </Link>
                 </div>
-                {loading ? (
+                {publicError ? (
+                    <div className="inline-alert">
+                        <span>{publicError}</span>
+                        <button type="button" onClick={reloadPublic}>
+                            Retry
+                        </button>
+                    </div>
+                ) : null}
+                {publicLoading ? (
                     <p className="panel__loading">Loading complaints…</p>
                 ) : (
                     <RecentComplaintsTable
-                        complaints={complaints.slice(0, 10)}
+                        complaints={publicComplaints.slice(0, 8)}
                         showViewAll={false}
-                        viewAllPath={listPath}
+                        complaintDetailBase={
+                            isStudent ? '/student/complaints' : undefined
+                        }
                     />
                 )}
             </article>
 
-            {isStudent ? (
-                <section className="unified-how" aria-labelledby="how-title">
-                    <h2 id="how-title">How it works</h2>
-                    <ol className="unified-how__steps">
-                        <li className="unified-how__step">
-                            <span className="unified-how__step-num">1</span>
-                            <h3>Login</h3>
-                            <p>Use your URN and password to access the portal.</p>
-                        </li>
-                        <li className="unified-how__step">
-                            <span className="unified-how__step-num">2</span>
-                            <h3>Raise complaint</h3>
-                            <p>
-                                {registerPath ? (
-                                    <Link to={registerPath} className="link-teal">
-                                        Submit details
-                                    </Link>
-                                ) : (
-                                    'Submit details'
-                                )}{' '}
-                                and supporting information.
-                            </p>
-                        </li>
-                        <li className="unified-how__step">
-                            <span className="unified-how__step-num">3</span>
-                            <h3>Track progress</h3>
-                            <p>Follow status updates on your complaint list.</p>
-                        </li>
-                        <li className="unified-how__step">
-                            <span className="unified-how__step-num">4</span>
-                            <h3>Get resolution</h3>
-                            <p>Receive outcomes from the responsible team.</p>
-                        </li>
-                    </ol>
-                </section>
+            {role === 'advisor' ? (
+                <DashboardHowItWorks
+                    titleId="advisor-how-title"
+                    steps={getDashboardHowItWorksSteps('advisor', {
+                        complaints: listPath
+                    })}
+                />
             ) : null}
         </div>
     );

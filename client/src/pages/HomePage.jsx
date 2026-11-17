@@ -1,15 +1,20 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { complaintsApi } from '../api/client.js';
 import { AdminAuthModal } from '../components/AdminAuthModal.jsx';
 import { LoginModal } from '../components/LoginModal.jsx';
+import { PublicHeaderActions } from '../components/PublicHeaderActions.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { getPostLoginPath } from '../utils/roleRedirect.js';
 import { canAccessManagementPortal } from '../utils/managementAccess.js';
 import { getManagementDashboardPath } from '../utils/managementAccess.js';
 import { isAdminStaffRole } from '../utils/staffRoles.js';
 import { AppIcon } from '../components/AppIcon.jsx';
+import { HeroWorkflowOrbit } from '../components/HeroWorkflowOrbit.jsx';
+import { PublicContactSection } from '../components/PublicContactSection.jsx';
+import { DEMO_CONTACT } from '../constants/demoContact.js';
 import { IconMenu } from '../components/icons.jsx';
+import { ArrowRight, UserCircle } from 'lucide-react';
 import '../styles/home.css';
 import '../styles/cms-surfaces.css';
 
@@ -59,6 +64,8 @@ const STEPS = [
     }
 ];
 
+const STATS_REFRESH_MS = 60_000;
+
 function scrollToId(id) {
     const el = document.getElementById(id);
     if (el) {
@@ -71,18 +78,27 @@ export function HomePage() {
     const [adminLoginOpen, setAdminLoginOpen] = useState(false);
     const [adminLoginMode, setAdminLoginMode] = useState('admin');
     const [mobileNav, setMobileNav] = useState(false);
-    const [deptCount, setDeptCount] = useState(null);
+    const [stats, setStats] = useState(null);
+    const [statsError, setStatsError] = useState('');
+    const [statsLoading, setStatsLoading] = useState(true);
+    const [loginPostPath, setLoginPostPath] = useState(null);
     const [searchParams, setSearchParams] = useSearchParams();
+    const location = useLocation();
     const { isAuthenticated, user } = useAuth();
     const navigate = useNavigate();
 
-    const openLogin = useCallback(() => {
-        setLoginOpen(true);
-        setSearchParams({ login: '1' }, { replace: true });
-    }, [setSearchParams]);
+    const openLogin = useCallback(
+        (postPath = null) => {
+            setLoginPostPath(postPath);
+            setLoginOpen(true);
+            setSearchParams({ login: '1' }, { replace: true });
+        },
+        [setSearchParams]
+    );
 
     const closeLogin = useCallback(() => {
         setLoginOpen(false);
+        setLoginPostPath(null);
         if (searchParams.get('login')) {
             setSearchParams({}, { replace: true });
         }
@@ -110,37 +126,66 @@ export function HomePage() {
         }
     }, [searchParams, setSearchParams]);
 
-    useEffect(() => {
-        if (searchParams.get('login') === '1') {
-            setLoginOpen(true);
+    const loadStats = useCallback(async () => {
+        try {
+            const data = await complaintsApi.getPublicStats();
+            setStats(data.stats);
+            setStatsError('');
+        } catch (err) {
+            setStatsError(err.message || 'Unable to load statistics');
+        } finally {
+            setStatsLoading(false);
         }
-        if (searchParams.get('admin') === '1') {
-            openAdminLogin('admin');
-        }
-        if (searchParams.get('management') === '1') {
-            openAdminLogin('management');
-        }
-    }, [searchParams, openAdminLogin]);
+    }, []);
 
     useEffect(() => {
-        let cancelled = false;
-        (async () => {
-            try {
-                const data = await complaintsApi.getCategories();
-                const departments = new Set(
-                    (data.categories || [])
-                        .map((c) => c.targetDepartment)
-                        .filter(Boolean)
-                );
-                if (!cancelled) setDeptCount(departments.size);
-            } catch {
-                if (!cancelled) setDeptCount(null);
+        if (isAuthenticated && user) {
+            const modalParam =
+                searchParams.get('login') ||
+                searchParams.get('admin') ||
+                searchParams.get('management');
+            if (modalParam) {
+                setLoginOpen(false);
+                setAdminLoginOpen(false);
+                setSearchParams({}, { replace: true });
+                navigate(getPostLoginPath(user), { replace: true, state: null });
             }
-        })();
-        return () => {
-            cancelled = true;
-        };
-    }, []);
+            return;
+        }
+
+        const loginParam = searchParams.get('login');
+        const wantsLogin =
+            loginParam === '1' ||
+            loginParam === 'true' ||
+            (location.state?.from && !isAuthenticated);
+
+        if (wantsLogin) {
+            setLoginOpen(true);
+        } else if (!loginParam) {
+            setLoginOpen(false);
+        }
+        if (searchParams.get('admin') === '1') {
+            setAdminLoginMode('admin');
+            setAdminLoginOpen(true);
+        }
+        if (searchParams.get('management') === '1') {
+            setAdminLoginMode('management');
+            setAdminLoginOpen(true);
+        }
+    }, [
+        searchParams,
+        location.state,
+        isAuthenticated,
+        user,
+        navigate,
+        setSearchParams
+    ]);
+
+    useEffect(() => {
+        loadStats();
+        const id = window.setInterval(loadStats, STATS_REFRESH_MS);
+        return () => window.clearInterval(id);
+    }, [loadStats]);
 
     const handleLoginClick = () => {
         if (isAuthenticated && user) {
@@ -150,18 +195,35 @@ export function HomePage() {
         openLogin();
     };
 
+    const loginButtonLabel = () => {
+        if (!isAuthenticated) return 'Login';
+        if (user?.role === 'student') return 'My Profile';
+        return 'Open Portal';
+    };
+
     const handleAdminLoginClick = () => {
         if (isAuthenticated && user) {
-            if (canAccessManagementPortal(user.role)) {
-                navigate(getManagementDashboardPath());
-                return;
-            }
-            if (isAdminStaffRole(user.role)) {
-                navigate(getPostLoginPath(user));
-                return;
-            }
+            navigate(getPostLoginPath(user));
+            return;
         }
         openAdminLogin('admin');
+    };
+
+    const adminButtonLabel = () => {
+        if (!isAuthenticated || !user) return 'Login as Admin';
+        return 'Staff Portal';
+    };
+
+    const handleSubmitComplaint = () => {
+        if (isAuthenticated && user?.role === 'student') {
+            navigate('/student/complaints/register');
+            return;
+        }
+        if (isAuthenticated && user) {
+            navigate(getPostLoginPath(user));
+            return;
+        }
+        openLogin('/student/complaints/register');
     };
 
     const year = new Date().getFullYear();
@@ -185,6 +247,8 @@ export function HomePage() {
                             University Complaint Management System
                         </span>
                     </a>
+
+                    <PublicHeaderActions onRequestLogin={openLogin} />
 
                     <button
                         type="button"
@@ -238,63 +302,113 @@ export function HomePage() {
                         </button>
                         <button
                             type="button"
-                            className="public-header__admin"
+                            className="public-header__admin public-header__auth-btn"
                             onClick={() => {
                                 setMobileNav(false);
                                 handleAdminLoginClick();
                             }}
                         >
-                            Login as Admin
+                            <UserCircle size={18} strokeWidth={1.75} aria-hidden />
+                            {adminButtonLabel()}
                         </button>
                         <button
                             type="button"
-                            className="public-header__login"
+                            className="public-header__login public-header__auth-btn"
                             onClick={() => {
                                 setMobileNav(false);
                                 handleLoginClick();
                             }}
                         >
-                            {isAuthenticated ? 'Open Portal' : 'Login'}
+                            <UserCircle size={18} strokeWidth={1.75} aria-hidden />
+                            {loginButtonLabel()}
                         </button>
                     </nav>
                 </div>
             </header>
 
             <main>
-                <section id="home" className="hero surface-pattern-subtle">
-                    <div className="hero__content">
-                        <p className="section-label">University CMS</p>
-                        <h1 className="type-display">
-                            A better campus starts with being heard.
-                        </h1>
-                        <p className="hero__lead type-body-lg">
-                            Report issues, track progress, and access university
-                            support through one simple, transparent platform.
-                        </p>
-                        <div className="hero__actions">
-                            <button
-                                type="button"
-                                className="btn btn--primary"
-                                onClick={handleLoginClick}
-                            >
-                                {isAuthenticated ? 'Open portal' : 'Login'}
-                            </button>
-                            <button
-                                type="button"
-                                className="btn btn--outline"
-                                onClick={() => scrollToId('how-it-works')}
-                            >
-                                Learn More
-                            </button>
-                            <button
-                                type="button"
-                                className="btn btn--admin"
-                                onClick={handleAdminLoginClick}
-                            >
-                                Login as Admin
-                            </button>
+                <section id="home" className="hero hero--split surface-pattern-subtle">
+                    <div className="hero__split">
+                        <div className="hero__content">
+                            <p className="section-label">University CMS</p>
+                            <h1 className="type-display">
+                                A better campus starts with being heard.
+                            </h1>
+                            <p className="hero__lead type-body-lg">
+                                Report issues, track progress, and access
+                                university support through one simple, transparent
+                                platform.
+                            </p>
+                            <div className="hero__actions hero__actions--triple">
+                                <button
+                                    type="button"
+                                    className="btn btn--primary btn--with-icon cms-btn-reflect"
+                                    onClick={handleLoginClick}
+                                >
+                                    <UserCircle
+                                        size={18}
+                                        strokeWidth={1.75}
+                                        aria-hidden
+                                    />
+                                    {loginButtonLabel()}
+                                </button>
+                                <button
+                                    type="button"
+                                    className="btn btn--admin btn--with-icon cms-btn-reflect"
+                                    onClick={handleAdminLoginClick}
+                                >
+                                    <UserCircle
+                                        size={18}
+                                        strokeWidth={1.75}
+                                        aria-hidden
+                                    />
+                                    {adminButtonLabel()}
+                                </button>
+                                <button
+                                    type="button"
+                                    className="btn btn--outline btn--with-icon cms-btn-reflect"
+                                    onClick={handleSubmitComplaint}
+                                >
+                                    Submit a New Complaint
+                                    <ArrowRight
+                                        size={18}
+                                        strokeWidth={1.75}
+                                        aria-hidden
+                                    />
+                                </button>
+                            </div>
+                        </div>
+                        <div className="hero__aside">
+                            <HeroWorkflowOrbit />
                         </div>
                     </div>
+                </section>
+
+                <section
+                    className="stats-strip stats-strip--live"
+                    aria-label="Complaint statistics"
+                >
+                    {statsLoading ? (
+                        <p className="stats-strip__status">Loading statistics…</p>
+                    ) : statsError ? (
+                        <p className="stats-strip__status stats-strip__status--error">
+                            {statsError}
+                            <button type="button" onClick={loadStats}>
+                                Retry
+                            </button>
+                        </p>
+                    ) : (
+                        <>
+                            <div className="stats-strip__item">
+                                <strong>{stats?.registered ?? 0}</strong>
+                                <span>Complaints Registered</span>
+                            </div>
+                            <div className="stats-strip__item">
+                                <strong>{stats?.resolved ?? 0}</strong>
+                                <span>Complaints Resolved</span>
+                            </div>
+                        </>
+                    )}
                 </section>
 
                 <section className="features" aria-labelledby="features-title">
@@ -314,32 +428,47 @@ export function HomePage() {
                     </div>
                 </section>
 
-                {deptCount !== null ? (
-                    <section
-                        className="stats-strip stats-strip--minimal"
-                        aria-label="Platform overview"
-                    >
-                        <div className="stats-strip__item">
-                            <strong>{deptCount}</strong>
-                            <span>
-                                Service departments mapped from active
-                                categories
-                            </span>
-                        </div>
-                    </section>
-                ) : null}
-
                 <section
                     id="about"
                     className="about-section"
+                    aria-labelledby="about-title"
                 >
                     <p className="section-label">About the platform</p>
-                    <h2>About</h2>
-                    <p>
+                    <h2 id="about-title">About</h2>
+                    <p className="about-section__lead">
                         The University Complaint Management System connects
                         students and staff with the right departments to report
                         concerns, follow progress, and support a responsive
                         campus environment.
+                    </p>
+                    <p>
+                        It provides one secure channel to register issues—from
+                        academic and administrative matters to facilities and
+                        student services—and sends each complaint to the team
+                        responsible for review, action, and closure.
+                    </p>
+                    <ul className="about-section__list">
+                        <li>
+                            Role-based access for students, faculty, and
+                            university leadership
+                        </li>
+                        <li>
+                            Clear status updates from registration through
+                            resolution
+                        </li>
+                        <li>
+                            Escalation paths that involve HODs, deans, and the
+                            Vice Chancellor when needed
+                        </li>
+                        <li>
+                            Dashboards that help offices prioritise work and
+                            spot recurring themes across departments
+                        </li>
+                    </ul>
+                    <p>
+                        The platform is designed to keep the process fair,
+                        documented, and timely so every concern is heard and
+                        handled in line with university policy.
                     </p>
                 </section>
 
@@ -363,23 +492,19 @@ export function HomePage() {
                     </ol>
                 </section>
 
-                <section id="contact" className="contact-section">
-                    <p className="section-label">Support</p>
-                    <h2>Contact</h2>
-                    <p>
-                        For account access, use your university-provided URN
-                        and password. For technical support, contact your
-                        campus IT or student affairs office through official
-                        university channels.
-                    </p>
-                </section>
+                <PublicContactSection />
             </main>
 
             <footer className="public-footer">
                 <div className="public-footer__inner">
-                    <p className="public-footer__brand">
-                        University Complaint Management System
-                    </p>
+                    <div className="public-footer__brand-block">
+                        <p className="public-footer__brand">
+                            University Complaint Management System
+                        </p>
+                        <p className="public-footer__org">
+                            {DEMO_CONTACT.institution}
+                        </p>
+                    </div>
                     <nav aria-label="Footer">
                         <button type="button" onClick={() => scrollToId('home')}>
                             Home
@@ -397,13 +522,20 @@ export function HomePage() {
                             Contact
                         </button>
                     </nav>
-                    <p className="public-footer__copy">
-                        © {year} University Complaint Management System
-                    </p>
+                    <div className="public-footer__meta">
+                        <p className="public-footer__copy">
+                            © {year} University Complaint Management System
+                        </p>
+                        <p className="public-footer__demo">Demo site — temporary contact</p>
+                    </div>
                 </div>
             </footer>
 
-            <LoginModal open={loginOpen} onClose={closeLogin} />
+            <LoginModal
+                open={loginOpen}
+                onClose={closeLogin}
+                postLoginPath={loginPostPath}
+            />
             <AdminAuthModal
                 open={adminLoginOpen}
                 onClose={closeAdminLogin}

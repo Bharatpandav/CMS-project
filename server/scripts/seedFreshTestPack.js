@@ -22,6 +22,7 @@ import { ensureDefaultCategories } from '../utils/categoryHelper.js';
 import Category from '../models/categoryModel.js';
 import { DURATIONS, addTime } from '../utils/deadlineHelper.js';
 import { assertSafeToSeed } from './lib/databaseSafety.js';
+import { allocateComplaintPublicId } from '../utils/complaintPublicId.js';
 import {
     COMPLAINT_TITLE_PREFIXES,
     FRESH_TEST_EMAIL_DOMAIN,
@@ -295,7 +296,7 @@ async function seedComplaints(usersByKey, categoryAcademic) {
     const scenarios = [
         {
             raisedBy: studentA,
-            title: `${COMPLAINT_TAG} Submitted — awaiting HOD`,
+            title: `${COMPLAINT_TAG} Hostel water supply`,
             department: DEPT_CSE,
             status: 'submitted',
             currentLevel: 'hod',
@@ -305,7 +306,7 @@ async function seedComplaints(usersByKey, categoryAcademic) {
         },
         {
             raisedBy: studentA,
-            title: `${COMPLAINT_TAG} Assigned to advisor`,
+            title: `${COMPLAINT_TAG} Lab system fault`,
             department: DEPT_CSE,
             status: 'assigned',
             currentLevel: 'advisor',
@@ -316,7 +317,7 @@ async function seedComplaints(usersByKey, categoryAcademic) {
         },
         {
             raisedBy: studentA,
-            title: `${COMPLAINT_TAG} Group — invite to Priya`,
+            title: `${COMPLAINT_TAG} Shared lab equipment`,
             complaintType: 'group',
             visibility: 'public',
             isGroupComplaint: true,
@@ -348,13 +349,25 @@ async function seedComplaints(usersByKey, categoryAcademic) {
         },
         {
             raisedBy: studentB,
-            title: `${COMPLAINT_TAG} Escalated to VC`,
+            title: `${COMPLAINT_TAG} Campus Wi-Fi outage`,
             department: DEPT_CSE,
             status: 'escalated',
             currentLevel: 'vc',
             currentAssignee: vc._id,
+            assignedBy: dean._id,
             initialLevel: 'hod',
-            levelDeadline: addTime(DURATIONS.DEAN)
+            levelDeadline: addTime(DURATIONS.DEAN),
+            logs: [
+                {
+                    actor: dean,
+                    action: 'escalated',
+                    previousStatus: 'escalated',
+                    newStatus: 'escalated',
+                    newAssignee: vc._id,
+                    level: 'vc',
+                    remarks: 'Escalated from Dean to VC'
+                }
+            ]
         }
     ];
 
@@ -362,6 +375,7 @@ async function seedComplaints(usersByKey, categoryAcademic) {
         const {
             invitations = [],
             invite,
+            logs: scenarioLogs = [],
             complaintType = 'solo',
             visibility = 'public',
             isGroupComplaint = false,
@@ -370,6 +384,7 @@ async function seedComplaints(usersByKey, categoryAcademic) {
         } = scenario;
 
         const complaint = await Complaint.create({
+            publicId: await allocateComplaintPublicId(raisedBy.rollNumber),
             raisedBy: raisedBy._id,
             raisedByName: raisedBy.name,
             studentProfile: studentProfile(raisedBy),
@@ -403,6 +418,22 @@ async function seedComplaints(usersByKey, categoryAcademic) {
             action: 'submitted',
             remarks: 'Fresh test seed'
         });
+
+        for (const log of scenarioLogs) {
+            await ComplaintLog.create({
+                complaint: complaint._id,
+                actor: log.actor._id,
+                actorRole: log.actor.role,
+                previousStatus: log.previousStatus || null,
+                newStatus: log.newStatus || rest.status,
+                previousAssignee: log.previousAssignee || null,
+                newAssignee: log.newAssignee || rest.currentAssignee || null,
+                level: log.level,
+                assignedTo: log.newAssignee || rest.currentAssignee || null,
+                action: log.action,
+                remarks: log.remarks || ''
+            });
+        }
 
         for (const inv of invitations) {
             await ComplaintInvitation.create({

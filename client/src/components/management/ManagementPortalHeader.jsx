@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { IconBell, IconMenu, IconSearch } from '../icons.jsx';
+import { IconMenu, IconSearch } from '../icons.jsx';
+import { NotificationBell } from '../NotificationBell.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
+import { useLogoutToHome } from '../../hooks/useLogoutToHome.js';
 import { getManagementRoleLabel } from '../../config/managementPortalNav.js';
 
 export function ManagementPortalHeader({
@@ -9,7 +11,8 @@ export function ManagementPortalHeader({
     onSearch,
     menuOpen = false
 }) {
-    const { user, logout } = useAuth();
+    const { user } = useAuth();
+    const logoutToHome = useLogoutToHome();
     const navigate = useNavigate();
     const [query, setQuery] = useState('');
     const [open, setOpen] = useState(false);
@@ -66,15 +69,10 @@ export function ManagementPortalHeader({
             </form>
 
             <div className="mgmt-header__actions">
-                <button
-                    type="button"
+                <NotificationBell
                     className="mgmt-header__bell"
-                    aria-label="Notifications unavailable"
-                    title="Notifications are not implemented"
-                    disabled
-                >
-                    <IconBell />
-                </button>
+                    badgeClassName="mgmt-header__badge"
+                />
 
                 <div className="mgmt-profile" ref={menuRef}>
                     <button
@@ -105,8 +103,7 @@ export function ManagementPortalHeader({
                                 type="button"
                                 onClick={async () => {
                                     setOpen(false);
-                                    await logout();
-                                    navigate('/');
+                                    await logoutToHome();
                                 }}
                             >
                                 Logout

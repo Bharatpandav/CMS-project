@@ -1,4 +1,6 @@
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext.jsx';
+import { useLogoutToHome } from '../../hooks/useLogoutToHome.js';
 import {
     IconClipboard,
     IconDashboard,
@@ -52,15 +54,14 @@ export function ManagementPortalSidebar({
     mobileOpen,
     onClose
 }) {
-    const { user, logout } = useAuth();
-    const navigate = useNavigate();
+    const { user } = useAuth();
+    const logoutToHome = useLogoutToHome();
     const sections = getManagementNavSections(user);
     const closeMobile = () => onClose?.();
 
     const handleLogout = async () => {
         closeMobile();
-        await logout();
-        navigate('/', { replace: true });
+        await logoutToHome();
     };
 
     const isMobile = variant === 'mobile';

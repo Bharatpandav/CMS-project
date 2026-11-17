@@ -39,8 +39,12 @@ export function AuthProvider({ children }) {
             window.removeEventListener('cms:session-expired', onExpired);
     }, []);
 
-    const login = useCallback(async (identifier, password) => {
-        const data = await authApi.login(identifier, password);
+    const login = useCallback(async (identifier, password, options = {}) => {
+        const data = await authApi.login(
+            identifier,
+            password,
+            options.loginChannel
+        );
         setAuthToken(data.token);
         setStoredUser(data.user);
         setUser(data.user);

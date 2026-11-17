@@ -1,9 +1,12 @@
 import { useCallback, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
-import { resolvePostLoginPath } from '../utils/navigationPaths.js';
+import {
+    getRoleDashboardPath,
+    resolvePostLoginPath
+} from '../utils/navigationPaths.js';
 
-export function useLoginSubmit({ onSuccess } = {}) {
+export function useLoginSubmit({ onSuccess, postLoginPath } = {}) {
     const { login } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
@@ -27,13 +30,22 @@ export function useLoginSubmit({ onSuccess } = {}) {
 
             setLoading(true);
             try {
-                const data = await login(urn, pwd);
+                const data = await login(urn, pwd, { loginChannel: 'student' });
+                const dashboard = getRoleDashboardPath(data.user);
+                let dest = dashboard;
+
+                if (postLoginPath && data.user?.role === 'student') {
+                    dest = postLoginPath;
+                } else {
+                    dest = resolvePostLoginPath(
+                        data.user,
+                        location.state?.from,
+                        { dashboardFallback: dashboard }
+                    );
+                }
+
+                navigate(dest, { replace: true, state: null });
                 onSuccess?.();
-                const dest = resolvePostLoginPath(
-                    data.user,
-                    location.state?.from
-                );
-                navigate(dest, { replace: true });
                 return true;
             } catch (err) {
                 setError(
@@ -45,7 +57,7 @@ export function useLoginSubmit({ onSuccess } = {}) {
                 setLoading(false);
             }
         },
-        [login, navigate, onSuccess, location]
+        [login, navigate, onSuccess, location, postLoginPath]
     );
 
     return { submitLogin, loading, error, setError };

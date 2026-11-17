@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { managementApi } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { rolesActorMayAssign } from '../utils/allowedRoles.js';
+import { notifyDashboardUserStatsChanged } from '../utils/dashboardSync.js';
 
 const ALL_ROLES = ['student', 'advisor', 'hod', 'dean', 'super_admin'];
 
@@ -66,6 +67,7 @@ export function ManagementUserEditModal({ userId, open, onClose, onSaved }) {
                 payload.semester = Number(form.semester);
             }
             const data = await managementApi.updateUser(userId, payload);
+            notifyDashboardUserStatsChanged();
             onSaved?.(data.user);
             onClose();
         } catch (err) {

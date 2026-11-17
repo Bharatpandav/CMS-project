@@ -159,11 +159,16 @@
 
 .data-table .title-cell,
 .mgmt-table .title-cell {
-    max-width: min(280px, 32vw);
+    max-width: min(320px, 36vw);
+    overflow: hidden;
+    font-weight: 600;
+}
+
+.data-table .title-cell__text,
+.mgmt-table .title-cell__text {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-weight: 600;
 }
 
 .panel--table .table-scroll,

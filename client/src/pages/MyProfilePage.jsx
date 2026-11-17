@@ -10,7 +10,7 @@ import { getProfileHomePath } from '../utils/profileFieldConfig.js';
 export function MyProfilePage() {
     const { user } = useAuth();
     const location = useLocation();
-    const homePath = getProfileHomePath(location.pathname);
+    const homePath = getProfileHomePath(location.pathname, user?.role);
 
     const [profile, setProfile] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -30,6 +30,7 @@ export function MyProfilePage() {
     };
 
     useEffect(() => {
+        document.title = 'My Profile | SBSSU CMS';
         loadProfile();
     }, []);
 
@@ -50,12 +51,22 @@ export function MyProfilePage() {
             />
 
             <div className="profile-layout">
-                <ProfileInfoCard
-                    profile={profile}
-                    loading={loading}
-                    error={error}
-                    onRetry={loadProfile}
-                />
+                <div className="profile-layout__main">
+                    <ProfileInfoCard
+                        profile={profile}
+                        loading={loading}
+                        error={error}
+                        onRetry={loadProfile}
+                    />
+                    <p className="field-hint profile-readonly-note">
+                        Name, email, and phone are issued by the university and
+                        cannot be edited here. You can change your password
+                        below.
+                        {!profile?.email || !profile?.phone
+                            ? ' Missing contact details must be completed by an administrator.'
+                            : ''}
+                    </p>
+                </div>
                 <ChangePasswordCard />
             </div>
         </div>
