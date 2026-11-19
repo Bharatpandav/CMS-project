@@ -3,7 +3,10 @@ import userModel from '../models/userModel.js';
 import escapeRegExp from '../utils/escapeRegExp.js';
 import { validateEmailAddress } from '../utils/emailValidation.js';
 import { allowedRoles } from '../middleware/authorizeUserManagement.js';
-import generatePassword from '../utils/generatePassword.js';
+import {
+    buildInitialUserPassword,
+    parseDateOfBirthInput
+} from './devCredentialPatterns.js';
 
 const VALID_ROLES = [
     'student',
@@ -21,7 +24,8 @@ function normalizeRecord(raw, rowNumber) {
         'department',
         'rollNumber',
         'semester',
-        'section'
+        'section',
+        'dateOfBirth'
     ];
     const record = { rowNumber };
     for (const key of keys) {
@@ -228,6 +232,20 @@ export async function validateBulkRecords(records, creator) {
             reasons.push(`${role} accounts require department`);
         }
 
+        let parsedDateOfBirth = null;
+        if (role && role !== 'student') {
+            if (!row.dateOfBirth?.trim()) {
+                reasons.push(
+                    'Staff and admin accounts require dateOfBirth (YYYY-MM-DD)'
+                );
+            } else {
+                parsedDateOfBirth = parseDateOfBirthInput(row.dateOfBirth);
+                if (!parsedDateOfBirth) {
+                    reasons.push('Invalid dateOfBirth — use YYYY-MM-DD');
+                }
+            }
+        }
+
         let status = 'valid';
         if (isInFileDuplicate) {
             status = 'duplicate';
@@ -245,7 +263,8 @@ export async function validateBulkRecords(records, creator) {
                 department: effectiveDepartment,
                 rollNumber: trimmedRoll || undefined,
                 semester: row.semester ? Number(row.semester) : undefined,
-                section: row.section?.trim() || undefined
+                section: row.section?.trim() || undefined,
+                dateOfBirth: parsedDateOfBirth || undefined
             });
         }
 
@@ -317,7 +336,25 @@ export async function createUsersFromValidRecords(validRecords) {
                 }
             }
 
-            const temporaryPassword = generatePassword();
+            let temporaryPassword;
+            try {
+                temporaryPassword = buildInitialUserPassword({
+                    role: row.role,
+                    name: row.name.trim(),
+                    rollNumber: row.rollNumber,
+                    dateOfBirth: row.dateOfBirth
+                });
+            } catch (passwordError) {
+                failedUsers.push({
+                    row: rowNumber,
+                    email: row.email,
+                    reason:
+                        passwordError.message ||
+                        'Could not generate initial password'
+                });
+                continue;
+            }
+
             const hashedPassword = await bcryptjs.hash(temporaryPassword, 10);
 
             const user = await userModel.create({
@@ -329,6 +366,7 @@ export async function createUsersFromValidRecords(validRecords) {
                 rollNumber: row.rollNumber || undefined,
                 semester: row.semester ?? undefined,
                 section: row.section || undefined,
+                dateOfBirth: row.dateOfBirth || undefined,
                 isFirstLogin: true,
                 isActive: true
             });

@@ -1,6 +1,9 @@
 import bcryptjs from 'bcryptjs';
 import userModel from '../models/userModel.js';
-import generatePassword from '../utils/generatePassword.js';
+import {
+    buildInitialUserPassword,
+    parseDateOfBirthInput
+} from '../utils/devCredentialPatterns.js';
 import escapeRegExp from '../utils/escapeRegExp.js';
 import { allowedRoles } from '../middleware/authorizeUserManagement.js';
 import { publishUserStatsInvalidation } from '../utils/dashboardEventHub.js';
@@ -20,7 +23,8 @@ const createUser = async (req, res) => {
             department,
             rollNumber,
             semester,
-            section
+            section,
+            dateOfBirth
         } = req.body;
 
         // Validate required fields
@@ -155,10 +159,42 @@ const createUser = async (req, res) => {
             }
         }
 
-        // Cryptographically secure temporary password generation
-        const temporaryPassword = generatePassword();
+        let parsedDateOfBirth = null;
+        if (role !== 'student') {
+            if (!dateOfBirth) {
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        'Date of birth is required for staff and admin accounts (YYYY-MM-DD)'
+                });
+            }
+            parsedDateOfBirth = parseDateOfBirthInput(dateOfBirth);
+            if (!parsedDateOfBirth) {
+                return res.status(400).json({
+                    success: false,
+                    message:
+                        'Invalid date of birth. Use YYYY-MM-DD format.'
+                });
+            }
+        }
 
-        // Hash password before storing in MongoDB
+        let temporaryPassword;
+        try {
+            temporaryPassword = buildInitialUserPassword({
+                role,
+                name: name.trim(),
+                rollNumber: rollNumber?.trim(),
+                dateOfBirth: parsedDateOfBirth
+            });
+        } catch (passwordError) {
+            return res.status(400).json({
+                success: false,
+                message:
+                    passwordError.message ||
+                    'Could not generate initial password'
+            });
+        }
+
         const hashedPassword = await bcryptjs.hash(temporaryPassword, 10);
 
         // Create user with mandatory first login flag
@@ -171,6 +207,7 @@ const createUser = async (req, res) => {
             rollNumber: rollNumber?.trim() || undefined,
             semester: semester ? Number(semester) : undefined,
             section: section?.trim() || undefined,
+            dateOfBirth: parsedDateOfBirth || undefined,
             isFirstLogin: true,
             isActive: true
         });
