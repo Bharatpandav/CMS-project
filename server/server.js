@@ -2,6 +2,7 @@ import 'dotenv/config';
 
 import express from 'express';
 import connectDB from './config/db.js';
+import { configureCors } from './middleware/configureCors.js';
 import userRouter from './routes/userRoutes.js';
 import complaintRouter from './routes/complaintRoutes.js';
 import userManagementRouter from './routes/userManagementRoutes.js';
@@ -17,8 +18,14 @@ connectDB();
 
 const app = express();
 
+configureCors(app);
+
 app.use(express.json({ limit: '12mb' }));
 app.use(cookieParser());
+
+app.get('/api/health', (req, res) => {
+    res.json({ ok: true, service: 'cms-api' });
+});
 
 app.use('/api/complaints', complaintRouter);
 app.use('/api/user', userRouter);

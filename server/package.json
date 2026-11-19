@@ -7,6 +7,7 @@
     "bcrypt": "^6.0.0",
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
     "csv-parse": "^7.0.3",
     "dotenv": "^18.0.3",
     "express": "^5.2.1",
@@ -25,6 +26,8 @@
     "seed:dev": "node scripts/seedDevTestData.js",
     "seed:fresh": "node scripts/seedFreshTestPack.js",
     "verify:dev": "node scripts/verifyDevCredentials.js",
+    "bootstrap:vc": "node scripts/seedTempVc.js",
+    "bootstrap:management": "node scripts/seedTempManagement.js",
     "backfill:complaint-ids": "node scripts/backfillComplaintPublicIds.js",
     "test:complaint-ids": "node scripts/testComplaintPublicIds.js",
     "test:complaint-access": "node scripts/testComplaintAccess.js"
