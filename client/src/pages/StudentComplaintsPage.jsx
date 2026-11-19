@@ -1,19 +1,41 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
+import { PageHeader } from '../components/PageHeader.jsx';
 import { RecentComplaintsTable } from '../components/RecentComplaintsTable.jsx';
 import { useComplaintsData } from '../hooks/useComplaintsData.js';
+import { useListUiRestore } from '../hooks/useListUiRestore.js';
 
-export function StudentComplaintsPage({ title = 'My Complaints' }) {
+export function StudentComplaintsPage({
+    title = 'My Complaints',
+    scope = 'mine'
+}) {
+    const location = useLocation();
+    const [searchParams] = useSearchParams();
+    const listStateKey = location.pathname + location.search;
+    const isPublic = scope === 'public';
+    const status = isPublic ? undefined : searchParams.get('status') || undefined;
+    useListUiRestore(listStateKey);
     const { complaints, loading, error, reload } = useComplaintsData({
         limit: 50,
-        myComplaints: 'true'
+        myComplaints: isPublic ? undefined : true,
+        raisedOnly: isPublic ? undefined : true,
+        publicFeed: isPublic,
+        status
     });
 
     return (
         <div className="page-stack">
-            <header className="page-header">
-                <h1>{title}</h1>
-                <p>Complaints you have raised or joined.</p>
-            </header>
+            <PageHeader
+                breadcrumbs={[
+                    { to: '/student/dashboard', label: 'Dashboard' },
+                    { label: title }
+                ]}
+                title={title}
+                description={
+                    isPublic
+                        ? 'Latest public complaints across the university. Private complaints are not included.'
+                        : 'Complaints you have raised or joined.'
+                }
+            />
 
             {error ? (
                 <div className="inline-alert">
@@ -29,14 +51,17 @@ export function StudentComplaintsPage({ title = 'My Complaints' }) {
                     <RecentComplaintsTable
                         complaints={complaints}
                         showViewAll={false}
+                        complaintDetailBase="/student/complaints"
+                        listStateKey={listStateKey}
                     />
                 )}
             </article>
             <p className="hint">
-                To file a new complaint, use the official filing flow when
-                available from your portal.{' '}
-                <Link to="/student/support" className="link-teal">
-                    Support
+                <Link
+                    to="/student/complaints/register"
+                    className="link-teal"
+                >
+                    Register a new complaint
                 </Link>
             </p>
         </div>

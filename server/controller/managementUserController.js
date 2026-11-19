@@ -1,25 +1,55 @@
 import { Parser } from 'json2csv';
 import userModel from '../models/userModel.js';
+import Complaint from '../models/complaintModel.js';
+import ComplaintInvitation from '../models/complaintInvitationModel.js';
+import Notification from '../models/notificationModel.js';
+import {
+    assertDeleteTargetInManagementScope,
+    canPermanentlyDeleteUser
+} from '../utils/userDeleteAuthorization.js';
 import escapeRegExp from '../utils/escapeRegExp.js';
 import { assertCanManageTargetRole } from '../middleware/authorizeManagement.js';
+import {
+    collectAffectedDepartments,
+    countDashboardUserStats,
+    DEPARTMENT_STAFF_ROLES,
+    resolveUserStatsScope
+} from '../utils/dashboardUserStatsHelper.js';
+import { publishUserStatsInvalidation } from '../utils/dashboardEventHub.js';
+import {
+    applyDepartmentUserFilter
+} from '../utils/departmentUserFilter.js';
 
 const publicUserFields =
     'name email role department rollNumber semester section isActive isFirstLogin createdAt updatedAt';
 
-const buildListFilter = (query) => {
+const INSTITUTION_STAFF_ROLES = [
+    'advisor',
+    'hod',
+    'dean',
+    'super_admin'
+];
+
+const buildListFilter = (query, actor = null) => {
     const filter = {};
     const { role, department, status, search } = query;
+    const actorRole = actor?.role;
 
     if (role === 'staff') {
         filter.role = {
-            $in: ['advisor', 'hod', 'dean', 'super_admin']
+            $in:
+                actorRole === 'hod'
+                    ? DEPARTMENT_STAFF_ROLES
+                    : INSTITUTION_STAFF_ROLES
         };
     } else if (role) {
         filter.role = role;
     }
+
     if (department) {
-        filter.department = department;
+        applyDepartmentUserFilter(filter, department);
     }
+
     if (status === 'active') {
         filter.isActive = true;
     } else if (status === 'inactive') {
@@ -37,30 +67,58 @@ const buildListFilter = (query) => {
         ];
     }
 
+    if (actor) {
+        const scope = resolveUserStatsScope(actor);
+        if (scope.scope === 'department' && scope.department) {
+            applyDepartmentUserFilter(filter, scope.department);
+        }
+    }
+
     return filter;
 };
 
 const getUserStats = async (req, res) => {
     try {
-        const [total, students, staff, active, inactive] = await Promise.all([
-            userModel.countDocuments(),
-            userModel.countDocuments({ role: 'student' }),
-            userModel.countDocuments({
-                role: { $in: ['advisor', 'hod', 'dean', 'super_admin'] }
-            }),
-            userModel.countDocuments({ isActive: true }),
-            userModel.countDocuments({ isActive: false })
-        ]);
+        const actor = await userModel
+            .findById(req.user.id)
+            .select('role department isActive')
+            .lean();
+
+        if (!actor?.isActive) {
+            return res.status(403).json({
+                success: false,
+                message: 'Account is inactive or not found'
+            });
+        }
+
+        const scopeConfig = resolveUserStatsScope(actor);
+
+        if (
+            scopeConfig.scope === 'department' &&
+            !scopeConfig.department
+        ) {
+            return res.json({
+                success: true,
+                stats: {
+                    totalUsers: 0,
+                    totalStudents: 0,
+                    totalStaff: 0,
+                    activeStudents: 0,
+                    activeStaff: 0,
+                    activeAccounts: 0,
+                    inactiveAccounts: 0,
+                    scope: scopeConfig.scope,
+                    department: null,
+                    noDepartment: true
+                }
+            });
+        }
+
+        const stats = await countDashboardUserStats(scopeConfig);
 
         return res.json({
             success: true,
-            stats: {
-                totalUsers: total,
-                totalStudents: students,
-                totalStaff: staff,
-                activeAccounts: active,
-                inactiveAccounts: inactive
-            }
+            stats
         });
     } catch (error) {
         console.error('User stats error:', error);
@@ -73,6 +131,18 @@ const getUserStats = async (req, res) => {
 
 const listUsers = async (req, res) => {
     try {
+        const actor = await userModel
+            .findById(req.user.id)
+            .select('role department isActive')
+            .lean();
+
+        if (!actor?.isActive) {
+            return res.status(403).json({
+                success: false,
+                message: 'Account is inactive or not found'
+            });
+        }
+
         const page = Math.max(1, Number(req.query.page) || 1);
         const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
         const sortBy = req.query.sortBy || 'createdAt';
@@ -86,7 +156,7 @@ const listUsers = async (req, res) => {
         ];
         const sortField = allowedSort.includes(sortBy) ? sortBy : 'createdAt';
 
-        const filter = buildListFilter(req.query);
+        const filter = buildListFilter(req.query, actor);
 
         const [users, total] = await Promise.all([
             userModel
@@ -150,6 +220,8 @@ const updateUser = async (req, res) => {
                 message: 'User not found'
             });
         }
+
+        const beforeChange = target.toObject();
 
         if (target._id.toString() === actorId) {
             if (req.body.role && req.body.role !== target.role) {
@@ -244,6 +316,10 @@ const updateUser = async (req, res) => {
             .select(publicUserFields)
             .lean();
 
+        publishUserStatsInvalidation(
+            collectAffectedDepartments(beforeChange, user)
+        );
+
         return res.json({
             success: true,
             message: 'User updated successfully',
@@ -301,6 +377,10 @@ const setUserStatus = async (req, res) => {
             .select(publicUserFields)
             .lean();
 
+        publishUserStatsInvalidation(
+            collectAffectedDepartments(user, user)
+        );
+
         return res.json({
             success: true,
             message: `User ${isActive ? 'activated' : 'deactivated'}`,
@@ -314,9 +394,123 @@ const setUserStatus = async (req, res) => {
     }
 };
 
+const deleteUserPermanently = async (req, res) => {
+    try {
+        const actorId = req.user.id;
+        const actor = await userModel
+            .findById(actorId)
+            .select('role department isActive name')
+            .lean();
+
+        if (!actor?.isActive) {
+            return res.status(403).json({
+                success: false,
+                message: 'Account is inactive or not found'
+            });
+        }
+
+        const target = await userModel.findById(req.params.id);
+
+        if (!target) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+
+        if (target._id.toString() === actorId) {
+            return res.status(403).json({
+                success: false,
+                message: 'You cannot delete your own account'
+            });
+        }
+
+        if (!canPermanentlyDeleteUser(actor.role, target.role)) {
+            return res.status(403).json({
+                success: false,
+                message:
+                    'You are not authorized to permanently delete this user'
+            });
+        }
+
+        const scope = assertDeleteTargetInManagementScope(actor, target);
+        if (!scope.ok) {
+            return res.status(403).json({
+                success: false,
+                message: scope.message
+            });
+        }
+
+        const targetId = target._id;
+
+        const raisedComplaint = await Complaint.exists({ raisedBy: targetId });
+        if (raisedComplaint) {
+            return res.status(409).json({
+                success: false,
+                message:
+                    'This user has complaint records as complainant. Deactivate the account instead of permanent deletion.'
+            });
+        }
+
+        const openAssignee = await Complaint.findOne({
+            currentAssignee: targetId,
+            status: { $nin: ['resolved', 'closed', 'rejected', 'withdrawn'] }
+        })
+            .select('publicId status')
+            .lean();
+
+        if (openAssignee) {
+            return res.status(409).json({
+                success: false,
+                message: `User is assigned to open complaint ${openAssignee.publicId || ''}. Reassign or resolve it before deletion.`.trim()
+            });
+        }
+
+        const dept = (target.department || '').trim();
+
+        await Promise.all([
+            Notification.deleteMany({ user: targetId }),
+            ComplaintInvitation.deleteMany({ student: targetId })
+        ]);
+
+        await userModel.deleteOne({ _id: targetId });
+
+        publishUserStatsInvalidation(dept ? [dept] : []);
+
+        return res.json({
+            success: true,
+            message: 'User permanently deleted'
+        });
+    } catch (error) {
+        console.error('Delete user error:', error);
+        if (error?.code === 11000) {
+            return res.status(409).json({
+                success: false,
+                message: 'Delete blocked by a database constraint'
+            });
+        }
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error'
+        });
+    }
+};
+
 const exportUsersCsv = async (req, res) => {
     try {
-        const filter = buildListFilter(req.query);
+        const actor = await userModel
+            .findById(req.user.id)
+            .select('role department isActive')
+            .lean();
+
+        if (!actor?.isActive) {
+            return res.status(403).json({
+                success: false,
+                message: 'Account is inactive or not found'
+            });
+        }
+
+        const filter = buildListFilter(req.query, actor);
         const users = await userModel
             .find(filter)
             .select(publicUserFields)
@@ -359,5 +553,6 @@ export {
     getUserById,
     updateUser,
     setUserStatus,
+    deleteUserPermanently,
     exportUsersCsv
 };

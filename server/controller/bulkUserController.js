@@ -6,6 +6,60 @@ import generatePassword from '../utils/generatePassword.js';
 import generateCredentialCSV from '../utils/generateCredentialCSV.js';
 import escapeRegExp from '../utils/escapeRegExp.js';
 import { allowedRoles } from '../middleware/authorizeUserManagement.js';
+import { publishUserStatsInvalidation } from '../utils/dashboardEventHub.js';
+import {
+    createUsersFromValidRecords,
+    validateBulkRecords
+} from '../utils/bulkUserRowValidation.js';
+
+const activeBulkImports = new Set();
+
+async function loadBulkCreator(req) {
+    const creator = await userModel
+        .findById(req.user.id)
+        .select('role department isActive')
+        .lean();
+
+    if (!creator?.isActive) {
+        return {
+            error: {
+                status: 403,
+                body: {
+                    success: false,
+                    message: 'Your account is inactive'
+                }
+            }
+        };
+    }
+
+    const rolesCreatorCanCreate = allowedRoles[creator.role];
+    if (!rolesCreatorCanCreate?.length) {
+        return {
+            error: {
+                status: 403,
+                body: {
+                    success: false,
+                    message: 'You are not authorized to create users'
+                }
+            }
+        };
+    }
+
+    if (creator.role === 'hod' && !(creator.department || '').trim()) {
+        return {
+            error: {
+                status: 422,
+                body: {
+                    success: false,
+                    message:
+                        'Your HOD account has no department assigned. Cannot import users.'
+                }
+            }
+        };
+    }
+
+    return { creator };
+}
 
 const validRoles = [
     'student',
@@ -24,7 +78,19 @@ const bulkCreateUsers = async (req, res) => {
             });
         }
 
-        const creatorRole = req.user?.role;
+        const creator = await userModel
+            .findById(req.user.id)
+            .select('role department isActive')
+            .lean();
+
+        if (!creator?.isActive) {
+            return res.status(403).json({
+                success: false,
+                message: 'Your account is inactive'
+            });
+        }
+
+        const creatorRole = creator.role;
 
         const rolesCreatorCanCreate =
             allowedRoles[creatorRole];
@@ -34,6 +100,19 @@ const bulkCreateUsers = async (req, res) => {
                 success: false,
                 message:
                     'You are not authorized to create users'
+            });
+        }
+
+        const hodDepartment =
+            creatorRole === 'hod'
+                ? (creator.department || '').trim()
+                : '';
+
+        if (creatorRole === 'hod' && !hodDepartment) {
+            return res.status(422).json({
+                success: false,
+                message:
+                    'Your HOD account has no department assigned. Cannot import users.'
             });
         }
 
@@ -82,6 +161,7 @@ const bulkCreateUsers = async (req, res) => {
 
         const createdUsers = [];
         const failedUsers = [];
+        const bulkAffectedDepartments = [];
 
         /*
          * Track duplicate emails and duplicate student roll numbers inside the CSV.
@@ -154,6 +234,21 @@ const bulkCreateUsers = async (req, res) => {
 
             const rowNumber = index + 2;
 
+            let effectiveDepartment = department?.trim() || '';
+
+            if (creatorRole === 'hod') {
+                if (!['student', 'advisor'].includes(role?.trim())) {
+                    failedUsers.push({
+                        row: rowNumber,
+                        email: email || '',
+                        reason:
+                            'HOD accounts may only import Student and Advisor users'
+                    });
+                    continue;
+                }
+                effectiveDepartment = hodDepartment;
+            }
+
             /*
              * Basic required-field validation
              */
@@ -191,7 +286,7 @@ const bulkCreateUsers = async (req, res) => {
             if (
                 role === 'student' &&
                 (
-                    !department ||
+                    !effectiveDepartment ||
                     !rollNumber ||
                     !semester ||
                     !section
@@ -235,7 +330,7 @@ const bulkCreateUsers = async (req, res) => {
                     role === 'advisor' ||
                     role === 'hod'
                 ) &&
-                !department
+                !effectiveDepartment
             ) {
                 failedUsers.push({
                     row: rowNumber,
@@ -374,7 +469,7 @@ const bulkCreateUsers = async (req, res) => {
                     role,
 
                     department:
-                        department?.trim() ||
+                        effectiveDepartment ||
                         undefined,
 
                     rollNumber:
@@ -415,6 +510,11 @@ const bulkCreateUsers = async (req, res) => {
                 rollNumber: user.rollNumber || undefined,
                 temporaryPassword
             });
+
+            const dept = (user.department || '').trim();
+            if (dept && !bulkAffectedDepartments.includes(dept)) {
+                bulkAffectedDepartments.push(dept);
+            }
         }
 
         /*
@@ -442,10 +542,22 @@ const bulkCreateUsers = async (req, res) => {
                 'attachment; filename="user-credentials.csv"'
             );
 
+            publishUserStatsInvalidation(
+                bulkAffectedDepartments.length
+                    ? bulkAffectedDepartments
+                    : []
+            );
+
             return res
                 .status(201)
                 .send(credentialCSV);
         }
+
+        publishUserStatsInvalidation(
+            bulkAffectedDepartments.length
+                ? bulkAffectedDepartments
+                : []
+        );
 
         /*
          * Normal JSON response
@@ -480,6 +592,126 @@ const bulkCreateUsers = async (req, res) => {
     }
 };
 
-export {
-    bulkCreateUsers
+export const bulkValidateUsers = async (req, res) => {
+    try {
+        const loaded = await loadBulkCreator(req);
+        if (loaded.error) {
+            return res.status(loaded.error.status).json(loaded.error.body);
+        }
+
+        const { records } = req.body;
+        if (!Array.isArray(records) || records.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'records array is required'
+            });
+        }
+
+        const validation = await validateBulkRecords(
+            records,
+            loaded.creator
+        );
+
+        return res.json({
+            success: true,
+            validated: true,
+            ...validation
+        });
+    } catch (error) {
+        console.error('Bulk validate error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error'
+        });
+    }
 };
+
+export const bulkImportValidatedUsers = async (req, res) => {
+    const actorId = req.user?.id;
+    if (!actorId) {
+        return res.status(401).json({
+            success: false,
+            message: 'Not authorized'
+        });
+    }
+
+    if (activeBulkImports.has(actorId)) {
+        return res.status(429).json({
+            success: false,
+            message:
+                'An import is already in progress. Wait for it to finish before submitting again.'
+        });
+    }
+
+    activeBulkImports.add(actorId);
+
+    try {
+        const loaded = await loadBulkCreator(req);
+        if (loaded.error) {
+            return res.status(loaded.error.status).json(loaded.error.body);
+        }
+
+        const { records } = req.body;
+        if (!Array.isArray(records) || records.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'No valid records submitted for import'
+            });
+        }
+
+        const revalidation = await validateBulkRecords(
+            records,
+            loaded.creator
+        );
+
+        const allStillValid =
+            revalidation.validRecords.length === records.length &&
+            revalidation.invalidCount === 0 &&
+            revalidation.duplicateCount === 0;
+
+        if (!allStillValid) {
+            return res.status(409).json({
+                success: false,
+                message:
+                    'One or more records failed final validation. Refresh the preview and try again.',
+                validation: revalidation
+            });
+        }
+
+        const totalSubmitted = records.length;
+        const { createdUsers, failedUsers, bulkAffectedDepartments } =
+            await createUsersFromValidRecords(revalidation.validRecords);
+
+        const credentialCSV = generateCredentialCSV(createdUsers);
+
+        publishUserStatsInvalidation(
+            bulkAffectedDepartments.length
+                ? bulkAffectedDepartments
+                : []
+        );
+
+        return res.status(201).json({
+            success: true,
+            message: 'Bulk import completed',
+            summary: {
+                totalSubmitted,
+                created: createdUsers.length,
+                failed: failedUsers.length,
+                skippedInvalid: Number(req.body.skippedInvalid) || 0
+            },
+            createdUsers,
+            failedUsers,
+            credentialCSV
+        });
+    } catch (error) {
+        console.error('Bulk import validated error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error'
+        });
+    } finally {
+        activeBulkImports.delete(actorId);
+    }
+};
+
+export { bulkCreateUsers };

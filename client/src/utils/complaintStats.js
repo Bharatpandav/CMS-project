@@ -14,12 +14,12 @@ export function computeComplaintStats(complaints = []) {
         if (['submitted', 'pending'].includes(status)) {
             stats.pending += 1;
         } else if (
-            ['accepted', 'assigned', 'escalated'].includes(status)
+            ['accepted', 'assigned', 'escalated', 'reopened'].includes(status)
         ) {
             stats.inProgress += 1;
         }
 
-        if (status === 'resolved') {
+        if (status === 'resolved' || status === 'closed') {
             stats.resolved += 1;
         }
         if (status === 'escalated') {

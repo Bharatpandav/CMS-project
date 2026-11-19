@@ -1,6 +1,7 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import '../styles/home.css';
 import { useAuth } from '../context/AuthContext.jsx';
+import { useLogoutToHome } from '../hooks/useLogoutToHome.js';
 import {
     getStaffDashboardPath,
     isAdminStaffRole
@@ -15,8 +16,8 @@ const ROLE_LABELS = {
 };
 
 export function PortalPage() {
-    const { user, logout } = useAuth();
-    const navigate = useNavigate();
+    const { user } = useAuth();
+    const logoutToHome = useLogoutToHome();
     const roleLabel = ROLE_LABELS[user?.role] || user?.role;
 
     return (
@@ -59,8 +60,7 @@ export function PortalPage() {
                         type="button"
                         className="btn btn--ghost"
                         onClick={async () => {
-                            await logout();
-                            navigate('/');
+                            await logoutToHome();
                         }}
                     >
                         Logout

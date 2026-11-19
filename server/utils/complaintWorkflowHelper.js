@@ -1,7 +1,16 @@
 import User from '../models/userModel.js';
 import ComplaintLog from '../models/complaintLogs.js';
+import { getDepartmentHodLookupCandidates } from '../constants/complaintDepartments.js';
+import { getDepartmentUserFilterValues } from './departmentUserFilter.js';
 
-export const TERMINAL_STATUSES = ['resolved', 'rejected'];
+export const departmentsAlign = (a, b) => {
+    if (!a || !b) return false;
+    const left = getDepartmentUserFilterValues(a);
+    const right = getDepartmentUserFilterValues(b);
+    return left.some((value) => right.includes(value));
+};
+
+export const TERMINAL_STATUSES = ['resolved', 'closed', 'rejected', 'withdrawn'];
 
 export const normalizeStatus = (status) =>
     status === 'pending' ? 'submitted' : status;
@@ -9,12 +18,18 @@ export const normalizeStatus = (status) =>
 export const loadActor = async (userId) =>
     User.findById(userId).select('role department isActive name');
 
-export const findDepartmentHod = async (department) =>
-    User.findOne({
-        role: 'hod',
-        department,
-        isActive: true
-    });
+export const findDepartmentHod = async (department) => {
+    const candidates = getDepartmentHodLookupCandidates(department);
+    for (const dept of candidates) {
+        const hod = await User.findOne({
+            role: 'hod',
+            department: dept,
+            isActive: true
+        });
+        if (hod) return hod;
+    }
+    return null;
+};
 
 export const findInstitutionalDean = async () =>
     User.findOne({
@@ -28,6 +43,7 @@ export const findViceChancellor = async () =>
         isActive: true
     });
 
+/** @deprecated Use client-selected department; kept for legacy callers */
 export const resolveResponsibleDepartment = (categoryDoc, student) => {
     let department = categoryDoc.targetDepartment;
 
@@ -47,9 +63,11 @@ export const recordComplaintLog = async ({
     newAssignee,
     level,
     action,
-    remarks
+    remarks,
+    attachments = [],
+    actionRecipient = null
 }) => {
-    await ComplaintLog.create({
+    return ComplaintLog.create({
         complaint: complaintId,
         actor: actor?._id || null,
         actorRole: actor?.role || null,
@@ -60,7 +78,9 @@ export const recordComplaintLog = async ({
         level,
         assignedTo: newAssignee || null,
         action,
-        remarks: remarks || ''
+        remarks: remarks || '',
+        attachments: Array.isArray(attachments) ? attachments : [],
+        actionRecipient: actionRecipient || newAssignee || null
     });
 };
 
@@ -73,7 +93,7 @@ export const actorIsAssignee = (complaint, actorId) =>
 export const actorIsDepartmentHod = (complaint, actor) =>
     actor?.role === 'hod' &&
     actor.department &&
-    complaint.department === actor.department;
+    departmentsAlign(actor.department, complaint.department);
 
 export const canActAsCurrentHandler = (complaint, actor) => {
     if (!actor?.isActive) {
@@ -133,57 +153,36 @@ export const validateAssignTarget = async ({
     }
 
     if (assigner.role === 'hod') {
-        if (assignee.role === 'advisor') {
-            if (assignee.department !== complaint.department) {
-                return {
-                    ok: false,
-                    message:
-                        'Advisor must belong to the complaint responsible department'
-                };
-            }
-
-            return { ok: true, assignee, nextLevel: 'advisor' };
+        if (assignee.role !== 'advisor') {
+            return {
+                ok: false,
+                message: 'HOD may assign only to an Advisor in their department'
+            };
         }
 
-        if (assignee.role === 'dean') {
-            return { ok: true, assignee, nextLevel: 'dean' };
+        if (
+            !departmentsAlign(assignee.department, complaint.department) ||
+            !departmentsAlign(assignee.department, assigner.department)
+        ) {
+            return {
+                ok: false,
+                message:
+                    'Advisor must belong to your department and the complaint department'
+            };
         }
 
-        return {
-            ok: false,
-            message: 'HOD may assign only to an Advisor or Dean'
-        };
+        return { ok: true, assignee, nextLevel: 'advisor' };
     }
 
     if (assigner.role === 'dean') {
-        if (assignee.role === 'hod') {
-            if (assignee.department !== complaint.department) {
-                return {
-                    ok: false,
-                    message:
-                        'HOD must belong to the complaint responsible department'
-                };
-            }
-
-            return { ok: true, assignee, nextLevel: 'hod' };
+        if (assignee.role !== 'hod') {
+            return {
+                ok: false,
+                message: 'Dean may assign only to an HOD'
+            };
         }
 
-        if (assignee.role === 'advisor') {
-            if (assignee.department !== complaint.department) {
-                return {
-                    ok: false,
-                    message:
-                        'Advisor must belong to the complaint responsible department'
-                };
-            }
-
-            return { ok: true, assignee, nextLevel: 'advisor' };
-        }
-
-        return {
-            ok: false,
-            message: 'Dean may assign only to an HOD or Advisor'
-        };
+        return { ok: true, assignee, nextLevel: 'hod' };
     }
 
     return {
@@ -194,27 +193,36 @@ export const validateAssignTarget = async ({
 
 const ACCEPT_FROM = ['submitted', 'pending', 'assigned', 'escalated'];
 const REJECT_FROM = ['submitted', 'pending', 'assigned'];
-const ASSIGN_FROM = [
-    'submitted',
-    'pending',
-    'accepted',
-    'assigned',
-    'escalated'
-];
-const ESCALATE_FROM = ['accepted', 'assigned', 'escalated', 'submitted'];
-const RESOLVE_FROM = ['accepted', 'assigned', 'escalated', 'submitted'];
+const ASSIGN_FROM = ['accepted', 'assigned', 'escalated', 'reopened'];
+const ESCALATE_FROM = ['accepted', 'assigned', 'escalated', 'reopened'];
+const RESOLVE_FROM = ['accepted', 'assigned', 'escalated', 'reopened'];
+const CLOSE_FROM = ['resolved'];
+
+export const AWAITING_INITIAL_ACCEPTANCE = ['submitted', 'pending'];
+
+export const requiresInitialAcceptance = (status) => {
+    const normalized = normalizeStatus(status);
+    return AWAITING_INITIAL_ACCEPTANCE.includes(normalized);
+};
 
 export const assertTransition = (action, currentStatus) => {
     const status = normalizeStatus(currentStatus);
+    const transitionKey =
+        action === 'accepted'
+            ? 'accept'
+            : action === 'rejected'
+              ? 'reject'
+              : action;
     const rules = {
         accept: ACCEPT_FROM,
         reject: REJECT_FROM,
         assign: ASSIGN_FROM,
         escalate: ESCALATE_FROM,
-        resolve: RESOLVE_FROM
+        resolve: RESOLVE_FROM,
+        close: CLOSE_FROM
     };
 
-    const allowed = rules[action];
+    const allowed = rules[transitionKey];
 
     if (
         !allowed ||
@@ -222,11 +230,28 @@ export const assertTransition = (action, currentStatus) => {
     ) {
         return {
             ok: false,
-            message: `Cannot ${action} complaint while status is ${currentStatus}`
+            message: `Cannot ${transitionKey} complaint while status is ${currentStatus}`
         };
     }
 
     return { ok: true };
+};
+
+export const canAuthorizeComplaintClose = (complaint, actor) => {
+    if (!actor?.isActive || actor.role !== 'hod') {
+        return false;
+    }
+    if (complaint?.status !== 'resolved') {
+        return false;
+    }
+    if (!actorIsDepartmentHod(complaint, actor)) {
+        return false;
+    }
+    const authorized = String(
+        complaint?.closureAuthorizedHod || complaint?.assignedBy || ''
+    );
+    const actorId = String(actor._id);
+    return Boolean(authorized) && authorized === actorId;
 };
 
 export const getListFilterForRole = (role, userId, department) => {

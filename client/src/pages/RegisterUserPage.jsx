@@ -1,9 +1,30 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { usersApi } from '../api/client.js';
+import { useAuth } from '../context/AuthContext.jsx';
+import { PageHeader } from '../components/PageHeader.jsx';
+import { notifyDashboardUserStatsChanged } from '../utils/dashboardSync.js';
+import { rolesActorMayAssign } from '../utils/allowedRoles.js';
 
-const ROLES = ['student', 'advisor', 'hod', 'dean'];
+const ROLE_LABELS = {
+    student: 'Student',
+    advisor: 'Advisor',
+    hod: 'HOD',
+    dean: 'Dean',
+    super_admin: 'Vice Chancellor'
+};
+
+const DEFAULT_ROLES = ['student', 'advisor', 'hod', 'dean'];
 
 export function RegisterUserPage() {
+    const { user } = useAuth();
+    const isHod = user?.role === 'hod';
+    const hodDepartment = (user?.department || '').trim();
+
+    const roleOptions = useMemo(() => {
+        const allowed = rolesActorMayAssign(user?.role);
+        return allowed.length ? allowed : DEFAULT_ROLES;
+    }, [user?.role]);
+
     const [form, setForm] = useState({
         name: '',
         email: '',
@@ -17,6 +38,31 @@ export function RegisterUserPage() {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
+    useEffect(() => {
+        document.title = 'Register User | SBSSU CMS';
+    }, []);
+
+    useEffect(() => {
+        if (!roleOptions.includes(form.role)) {
+            setForm((f) => ({ ...f, role: roleOptions[0] || 'student' }));
+        }
+    }, [form.role, roleOptions]);
+
+    useEffect(() => {
+        if (isHod && hodDepartment) {
+            setForm((f) => ({ ...f, department: hodDepartment }));
+        }
+    }, [isHod, hodDepartment]);
+
+    const homePath =
+        user?.role === 'hod'
+            ? '/hod/dashboard'
+            : user?.role === 'dean'
+              ? '/dean/dashboard'
+              : user?.role === 'super_admin'
+                ? '/vc/dashboard'
+                : '/app/dashboard';
+
     const update = (field) => (e) =>
         setForm((f) => ({ ...f, [field]: e.target.value }));
 
@@ -24,21 +70,36 @@ export function RegisterUserPage() {
         e.preventDefault();
         setError('');
         setResult(null);
+
+        if (isHod && !hodDepartment) {
+            setError(
+                'Your account has no department assigned. Contact the administrator before registering users.'
+            );
+            return;
+        }
+
         setLoading(true);
         try {
             const payload = {
                 name: form.name.trim(),
                 email: form.email.trim(),
                 role: form.role,
-                department: form.department.trim() || undefined,
                 rollNumber: form.rollNumber.trim() || undefined,
                 semester: form.semester
                     ? Number(form.semester)
                     : undefined,
                 section: form.section.trim() || undefined
             };
+
+            if (isHod) {
+                payload.department = hodDepartment;
+            } else if (form.department.trim()) {
+                payload.department = form.department.trim();
+            }
+
             const data = await usersApi.create(payload);
             setResult(data);
+            notifyDashboardUserStatsChanged();
         } catch (err) {
             setError(err.message || 'Registration failed');
         } finally {
@@ -48,14 +109,32 @@ export function RegisterUserPage() {
 
     return (
         <div className="page-stack">
-            <header className="page-header">
-                <h1>Register User</h1>
-                <p>Create a single user account with generated credentials.</p>
-            </header>
+            <PageHeader
+                title="Register User"
+                description={
+                    isHod
+                        ? 'Register students or advisors for your department only.'
+                        : 'Create a single user account with generated credentials.'
+                }
+                breadcrumbs={[
+                    { to: homePath, label: 'Dashboard' },
+                    { label: 'Register User' }
+                ]}
+            />
+
+            {isHod && !hodDepartment ? (
+                <p className="form-error" role="alert">
+                    Your HOD account does not have a department assigned. You
+                    cannot register users until an administrator configures your
+                    department.
+                </p>
+            ) : null}
 
             <form className="form-card" onSubmit={handleSubmit}>
                 {error ? (
-                    <p className="form-error" role="alert">{error}</p>
+                    <p className="form-error" role="alert">
+                        {error}
+                    </p>
                 ) : null}
                 <div className="form-grid">
                     <label>
@@ -81,19 +160,37 @@ export function RegisterUserPage() {
                             value={form.role}
                             onChange={update('role')}
                         >
-                            {ROLES.map((r) => (
+                            {roleOptions.map((r) => (
                                 <option key={r} value={r}>
-                                    {r}
+                                    {ROLE_LABELS[r] || r}
                                 </option>
                             ))}
                         </select>
                     </label>
                     <label>
                         Department
-                        <input
-                            value={form.department}
-                            onChange={update('department')}
-                        />
+                        {isHod ? (
+                            <>
+                                <input
+                                    value={form.department}
+                                    readOnly
+                                    disabled
+                                    aria-describedby="dept-hod-hint"
+                                />
+                                <span
+                                    id="dept-hod-hint"
+                                    className="field-hint"
+                                >
+                                    Automatically assigned to your department
+                                    and cannot be changed.
+                                </span>
+                            </>
+                        ) : (
+                            <input
+                                value={form.department}
+                                onChange={update('department')}
+                            />
+                        )}
                     </label>
                     {form.role === 'student' ? (
                         <>
@@ -125,7 +222,12 @@ export function RegisterUserPage() {
                         </>
                     ) : null}
                 </div>
-                <button type="submit" disabled={loading}>
+                <button
+                    type="submit"
+                    disabled={
+                        loading || (isHod && !hodDepartment)
+                    }
+                >
                     {loading ? 'Creating…' : 'Create user'}
                 </button>
             </form>
@@ -142,8 +244,8 @@ export function RegisterUserPage() {
                         <strong>{result.temporaryPassword}</strong>
                     </p>
                     <p className="hint">
-                        Share credentials securely. The user must change
-                        their password on first login.
+                        Share credentials securely. The user must change their
+                        password on first login.
                     </p>
                 </div>
             ) : null}

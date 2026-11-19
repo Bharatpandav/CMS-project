@@ -1,187 +1,137 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useId, useRef, useState } from 'react';
+import { ShieldCheck } from 'lucide-react';
 import { useLoginSubmit } from '../hooks/useLoginSubmit.js';
+import { PasswordField } from './PasswordField.jsx';
+import { ForgotPasswordDialog } from './ForgotPasswordDialog.jsx';
+import {
+    sanitizeUrnInput,
+    validateUrnForSubmit
+} from '../utils/urnValidation.js';
+import { Button, Dialog, FieldError, Input, Label } from './ui/index.js';
 
-function IconShield() {
-    return (
-        <svg
-            width="40"
-            height="40"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            aria-hidden="true"
-        >
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-            <path d="M9 12l2 2 4-4" />
-        </svg>
-    );
-}
-
-function IconEye({ open }) {
-    if (open) {
-        return (
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
-                <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
-                <line x1="1" y1="1" x2="23" y2="23" />
-            </svg>
-        );
-    }
-    return (
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-            <circle cx="12" cy="12" r="3" />
-        </svg>
-    );
-}
-
-export function LoginModal({ open, onClose }) {
+export function LoginModal({ open, onClose, postLoginPath }) {
     const titleId = useId();
     const descId = useId();
-    const dialogRef = useRef(null);
     const urnRef = useRef(null);
     const [urn, setUrn] = useState('');
     const [password, setPassword] = useState('');
-    const [showPassword, setShowPassword] = useState(false);
+    const [urnError, setUrnError] = useState('');
+    const [forgotOpen, setForgotOpen] = useState(false);
 
     const { submitLogin, loading, error, setError } = useLoginSubmit({
-        onSuccess: onClose
+        onSuccess: onClose,
+        postLoginPath
     });
 
-    useEffect(() => {
-        if (!open) {
-            setUrn('');
-            setPassword('');
-            setShowPassword(false);
-            setError('');
-            return;
-        }
-
-        const previousOverflow = document.body.style.overflow;
-        document.body.style.overflow = 'hidden';
-        urnRef.current?.focus();
-
-        const handleKey = (e) => {
-            if (e.key === 'Escape') {
-                onClose();
-            }
-        };
-
-        document.addEventListener('keydown', handleKey);
-        return () => {
-            document.body.style.overflow = previousOverflow;
-            document.removeEventListener('keydown', handleKey);
-        };
-    }, [open, onClose, setError]);
-
-    if (!open) {
-        return null;
-    }
+    const handleClose = useCallback(() => {
+        setUrn('');
+        setPassword('');
+        setUrnError('');
+        setError('');
+        onClose();
+    }, [onClose, setError]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        await submitLogin(urn, password);
+        setUrnError('');
+        const check = validateUrnForSubmit(urn);
+        if (!check.ok) {
+            setUrnError(check.message);
+            return;
+        }
+        await submitLogin(check.urn, password);
     };
 
     return (
-        <div
-            className="login-modal-backdrop"
-            onClick={onClose}
-            role="presentation"
-        >
-            <div
-                ref={dialogRef}
+        <>
+            <Dialog
+                open={open}
+                onClose={handleClose}
+                titleId={titleId}
+                descId={descId}
+                closeLabel="Close login dialog"
+                initialFocusRef={urnRef}
                 className="login-modal"
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby={titleId}
-                aria-describedby={descId}
-                onClick={(e) => e.stopPropagation()}
             >
-                <button
-                    type="button"
-                    className="login-modal__close"
-                    onClick={onClose}
-                    aria-label="Close login dialog"
+                <div
+                    className="login-modal__icon"
+                    style={{
+                        display: 'grid',
+                        placeItems: 'center',
+                        margin: '0 auto 0.75rem',
+                        color: 'var(--color-text-muted)'
+                    }}
                 >
-                    ×
-                </button>
-
-                <div className="login-modal__icon">
-                    <IconShield />
+                    <ShieldCheck size={40} strokeWidth={1.5} aria-hidden />
                 </div>
 
-                <h2 id={titleId}>Login to Your Account</h2>
+                <h2 id={titleId} className="login-modal__title">
+                    Login to your account
+                </h2>
                 <p id={descId} className="login-modal__sub">
                     Enter your URN and password to continue.
                 </p>
 
                 <form onSubmit={handleSubmit} className="login-modal__form">
-                    {error ? (
-                        <p className="form-error" role="alert">{error}</p>
-                    ) : null}
+                    <FieldError>{error}</FieldError>
 
-                    <label htmlFor="login-urn">
+                    <Label htmlFor="login-urn" hint="Digits only, max 10">
                         URN
-                        <input
+                        <Input
                             id="login-urn"
                             ref={urnRef}
                             type="text"
+                            inputMode="numeric"
+                            pattern="[0-9]*"
                             name="identifier"
                             placeholder="Enter your URN"
                             value={urn}
-                            onChange={(e) => setUrn(e.target.value)}
+                            onChange={(e) =>
+                                setUrn(sanitizeUrnInput(e.target.value))
+                            }
                             autoComplete="username"
                             disabled={loading}
+                            error={Boolean(error || urnError)}
                         />
-                        <span className="field-hint">e.g. 22BCE1045</span>
-                    </label>
-
-                    <label htmlFor="login-password">
-                        Password
-                        <span className="password-field">
-                            <input
-                                id="login-password"
-                                type={showPassword ? 'text' : 'password'}
-                                name="password"
-                                placeholder="Enter your password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                autoComplete="current-password"
-                                disabled={loading}
-                            />
-                            <button
-                                type="button"
-                                className="password-toggle"
-                                onClick={() =>
-                                    setShowPassword((v) => !v)
-                                }
-                                aria-label={
-                                    showPassword
-                                        ? 'Hide password'
-                                        : 'Show password'
-                                }
-                            >
-                                <IconEye open={showPassword} />
-                            </button>
+                    </Label>
+                    {urnError ? (
+                        <span className="ui-field-error" role="alert">
+                            {urnError}
                         </span>
-                    </label>
+                    ) : null}
+
+                    <PasswordField
+                        id="login-password"
+                        label="Password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        disabled={loading}
+                        autoComplete="current-password"
+                        placeholder="Enter your password"
+                    />
 
                     <button
-                        type="submit"
-                        className="login-modal__submit"
-                        disabled={loading}
+                        type="button"
+                        className="login-modal__forgot link-teal"
+                        onClick={() => setForgotOpen(true)}
                     >
-                        {loading ? 'Logging in…' : 'Login'}
+                        Forgot password?
                     </button>
+
+                    <Button type="submit" variant="primary" block disabled={loading}>
+                        {loading ? 'Logging in…' : 'Login'}
+                    </Button>
                 </form>
 
                 <p className="login-modal__note">
-                    Use your university-provided credentials (URN and Password)
-                    to access the system.
+                    Use your university-provided credentials (URN and password) to
+                    access the system.
                 </p>
-            </div>
-        </div>
+            </Dialog>
+            <ForgotPasswordDialog
+                open={forgotOpen}
+                onClose={() => setForgotOpen(false)}
+            />
+        </>
     );
 }

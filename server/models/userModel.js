@@ -16,6 +16,12 @@ const userSchema = new mongoose.Schema(
             trim: true
         },
 
+        phone: {
+            type: String,
+            trim: true,
+            default: ''
+        },
+
         password: {
             type: String,
             required: true
@@ -78,6 +84,18 @@ const userSchema = new mongoose.Schema(
         isActive: {
             type: Boolean,
             default: true
+        },
+
+        passwordResetTokenHash: {
+            type: String,
+            default: null,
+            select: false
+        },
+
+        passwordResetExpires: {
+            type: Date,
+            default: null,
+            select: false
         }
     },
     {

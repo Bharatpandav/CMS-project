@@ -3,12 +3,19 @@ import { useSearchParams } from 'react-router-dom';
 import { managementApi } from '../api/client.js';
 import { ManagementUserEditModal } from '../components/ManagementUserEditModal.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
+import { PageHeader } from '../components/PageHeader.jsx';
 import {
     downloadBlob,
     exportUsersExcel,
     exportUsersPdf,
     mapUsersForExport
 } from '../utils/exportUsers.js';
+import { notifyDashboardUserStatsChanged } from '../utils/dashboardSync.js';
+import {
+    canManageTargetUserRole,
+    canPermanentlyDeleteUser
+} from '../utils/userDeleteAuthorization.js';
+import { AppIcon } from '../components/AppIcon.jsx';
 
 const ROLE_LABELS = {
     student: 'Student',
@@ -33,11 +40,12 @@ export function ManagementUsersPage() {
     const [message, setMessage] = useState('');
     const [editId, setEditId] = useState(null);
     const [confirmStatus, setConfirmStatus] = useState(null);
+    const [confirmDelete, setConfirmDelete] = useState(null);
+    const [deleteBusy, setDeleteBusy] = useState(false);
 
     const page = Math.max(1, Number(searchParams.get('page')) || 1);
     const search = searchParams.get('search') || '';
     const role = searchParams.get('role') || '';
-    const department = searchParams.get('department') || '';
     const status = searchParams.get('status') || '';
     const sortBy = searchParams.get('sortBy') || 'createdAt';
     const sortOrder = searchParams.get('sortOrder') || 'desc';
@@ -54,7 +62,6 @@ export function ManagementUsersPage() {
             };
             if (search) params.search = search;
             if (role) params.role = role;
-            if (department) params.department = department;
             if (status) params.status = status;
 
             const data = await managementApi.listUsers(params);
@@ -66,7 +73,7 @@ export function ManagementUsersPage() {
         } finally {
             setLoading(false);
         }
-    }, [page, search, role, department, status, sortBy, sortOrder]);
+    }, [page, search, role, status, sortBy, sortOrder]);
 
     useEffect(() => {
         load();
@@ -91,6 +98,24 @@ export function ManagementUsersPage() {
         }
     };
 
+    const handlePermanentDelete = async () => {
+        if (!confirmDelete || deleteBusy) return;
+        setDeleteBusy(true);
+        setError('');
+        try {
+            await managementApi.deleteUser(confirmDelete.id);
+            setMessage(`User ${confirmDelete.name} was permanently deleted.`);
+            setConfirmDelete(null);
+            load();
+            notifyDashboardUserStatsChanged();
+        } catch (err) {
+            setError(err.message || 'Permanent deletion failed');
+            setConfirmDelete(null);
+        } finally {
+            setDeleteBusy(false);
+        }
+    };
+
     const handleStatusChange = async () => {
         if (!confirmStatus) return;
         try {
@@ -105,6 +130,7 @@ export function ManagementUsersPage() {
             );
             setConfirmStatus(null);
             load();
+            notifyDashboardUserStatsChanged();
         } catch (err) {
             setError(err.message || 'Status update failed');
             setConfirmStatus(null);
@@ -117,7 +143,6 @@ export function ManagementUsersPage() {
             const params = {};
             if (search) params.search = search;
             if (role) params.role = role;
-            if (department) params.department = department;
             if (status) params.status = status;
 
             if (format === 'csv') {
@@ -154,37 +179,69 @@ export function ManagementUsersPage() {
               ? 'Administrators & Staff'
               : 'All Users';
 
+    useEffect(() => {
+        document.title = `${title} | SBSSU CMS`;
+    }, [title]);
+
+    const homePath =
+        actor?.role === 'hod'
+            ? '/hod/dashboard'
+            : actor?.role === 'dean'
+              ? '/dean/dashboard'
+              : actor?.role === 'super_admin'
+                ? '/vc/dashboard'
+                : '/app/dashboard';
+    const actorDepartment = (actor?.department || '').trim();
+    const isDepartmentScoped =
+        actor?.role === 'hod' || actor?.role === 'advisor';
+
+    const activeFilterParts = [
+        role === 'student' ? 'Students' : role === 'staff' ? 'Staff' : null,
+        role && role !== 'student' && role !== 'staff'
+            ? formatRole(role)
+            : null,
+        status === 'active'
+            ? 'Active'
+            : status === 'inactive'
+              ? 'Inactive'
+              : null
+    ].filter(Boolean);
+
     return (
         <div className="page-stack">
-            <header className="page-header page-header--row">
-                <div>
-                    <h1>{title}</h1>
-                    <p>{total} user{total === 1 ? '' : 's'} matching filters.</p>
-                </div>
-                <div className="page-header__actions">
-                    <button
-                        type="button"
-                        className="btn btn--outline btn--sm"
-                        onClick={() => exportFiltered('csv')}
-                    >
-                        CSV
-                    </button>
-                    <button
-                        type="button"
-                        className="btn btn--outline btn--sm"
-                        onClick={() => exportFiltered('xlsx')}
-                    >
-                        Excel
-                    </button>
-                    <button
-                        type="button"
-                        className="btn btn--outline btn--sm"
-                        onClick={() => exportFiltered('pdf')}
-                    >
-                        PDF
-                    </button>
-                </div>
-            </header>
+            <PageHeader
+                title={title}
+                description={`${total} user${total === 1 ? '' : 's'} matching filters.`}
+                breadcrumbs={[
+                    { to: homePath, label: 'Dashboard' },
+                    { label: title }
+                ]}
+                actions={
+                    <div className="page-header__actions">
+                        <button
+                            type="button"
+                            className="btn btn--outline btn--sm"
+                            onClick={() => exportFiltered('csv')}
+                        >
+                            CSV
+                        </button>
+                        <button
+                            type="button"
+                            className="btn btn--outline btn--sm"
+                            onClick={() => exportFiltered('xlsx')}
+                        >
+                            Excel
+                        </button>
+                        <button
+                            type="button"
+                            className="btn btn--outline btn--sm"
+                            onClick={() => exportFiltered('pdf')}
+                        >
+                            PDF
+                        </button>
+                    </div>
+                }
+            />
 
             {message ? (
                 <p className="form-success" role="status">{message}</p>
@@ -216,14 +273,6 @@ export function ManagementUsersPage() {
                     <option value="dean">Dean</option>
                     <option value="super_admin">Vice Chancellor</option>
                 </select>
-                <input
-                    placeholder="Department"
-                    value={department}
-                    onChange={(e) =>
-                        patchParams({ department: e.target.value, page: '1' })
-                    }
-                    aria-label="Filter by department"
-                />
                 <select
                     value={status}
                     onChange={(e) =>
@@ -236,6 +285,20 @@ export function ManagementUsersPage() {
                     <option value="inactive">Inactive</option>
                 </select>
             </div>
+
+            {activeFilterParts.length > 0 ? (
+                <p className="staff-filter-summary" aria-live="polite">
+                    Active filters:{' '}
+                    <strong>{activeFilterParts.join(' · ')}</strong>
+                    {isDepartmentScoped && actorDepartment ? (
+                        <span className="filter-scope-hint">
+                            {' '}
+                            (department access limited to{' '}
+                            <strong>{actorDepartment}</strong>)
+                        </span>
+                    ) : null}
+                </p>
+            ) : null}
 
             <div className="panel panel--flush">
                 {loading ? (
@@ -293,6 +356,16 @@ export function ManagementUsersPage() {
                             {users.map((u) => {
                                 const id = u._id || u.id;
                                 const isSelf = id === actorId;
+                                const canManageOther = canManageTargetUserRole(
+                                    actor?.role,
+                                    u.role
+                                );
+                                const showDelete =
+                                    !isSelf &&
+                                    canPermanentlyDeleteUser(actor?.role, u.role);
+                                const showStatusToggle = !isSelf && canManageOther;
+                                const showEditOther = !isSelf && canManageOther;
+                                const showEditSelf = isSelf;
                                 return (
                                     <tr key={id}>
                                         <td>{u.name}</td>
@@ -326,14 +399,36 @@ export function ManagementUsersPage() {
                                                 : '—'}
                                         </td>
                                         <td className="table-actions">
-                                            <button
-                                                type="button"
-                                                className="link-teal"
-                                                onClick={() => setEditId(id)}
-                                            >
-                                                Edit
-                                            </button>
-                                            {!isSelf ? (
+                                            {showEditSelf || showEditOther ? (
+                                                <button
+                                                    type="button"
+                                                    className="link-teal"
+                                                    onClick={() => setEditId(id)}
+                                                >
+                                                    Edit
+                                                </button>
+                                            ) : null}
+                                            {showDelete ? (
+                                                <button
+                                                    type="button"
+                                                    className="table-actions__delete"
+                                                    title="Permanently delete user"
+                                                    aria-label={`Permanently delete ${u.name}`}
+                                                    onClick={() =>
+                                                        setConfirmDelete({
+                                                            id,
+                                                            name: u.name,
+                                                            role: u.role
+                                                        })
+                                                    }
+                                                >
+                                                    <AppIcon
+                                                        name="trash"
+                                                        size={16}
+                                                    />
+                                                </button>
+                                            ) : null}
+                                            {showStatusToggle ? (
                                                 <button
                                                     type="button"
                                                     className="link-danger"
@@ -395,6 +490,54 @@ export function ManagementUsersPage() {
                     load();
                 }}
             />
+
+            {confirmDelete ? (
+                <div
+                    className="modal-backdrop"
+                    role="presentation"
+                    onClick={() =>
+                        !deleteBusy && setConfirmDelete(null)
+                    }
+                >
+                    <div
+                        className="modal-panel modal-panel--sm modal-panel--warn"
+                        role="alertdialog"
+                        aria-labelledby="confirm-delete-title"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h2 id="confirm-delete-title">
+                            Permanently Delete User?
+                        </h2>
+                        <p>
+                            Are you sure you want to permanently delete{' '}
+                            <strong>{confirmDelete.name}</strong> (
+                            {formatRole(confirmDelete.role)})? This action
+                            cannot be undone. The user&apos;s account and
+                            associated data may be permanently removed.
+                        </p>
+                        <div className="form-actions">
+                            <button
+                                type="button"
+                                className="btn btn--outline"
+                                disabled={deleteBusy}
+                                onClick={() => setConfirmDelete(null)}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                className="btn btn--danger"
+                                disabled={deleteBusy}
+                                onClick={handlePermanentDelete}
+                            >
+                                {deleteBusy
+                                    ? 'Deleting…'
+                                    : 'Delete Permanently'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
 
             {confirmStatus ? (
                 <div

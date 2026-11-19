@@ -49,14 +49,35 @@ export const DEFAULT_CATEGORIES = [
         targetDepartment: 'Student Affairs',
         initialLevel: 'dean',
         isActive: true
+    },
+    {
+        name: 'Other',
+        description: 'Complaint category not listed above — specify your own',
+        targetDepartment: 'Academic Affairs',
+        initialLevel: 'hod',
+        isActive: true
     }
 ];
+
+export const OTHER_CATEGORY_NAME = 'Other';
 
 export const ensureDefaultCategories = async () => {
     try {
         const count = await Category.countDocuments();
         if (count === 0) {
             await Category.insertMany(DEFAULT_CATEGORIES);
+            return;
+        }
+
+        const other = DEFAULT_CATEGORIES.find(
+            (row) => row.name === OTHER_CATEGORY_NAME
+        );
+        if (other) {
+            await Category.updateOne(
+                { name: OTHER_CATEGORY_NAME },
+                { $setOnInsert: other },
+                { upsert: true }
+            );
         }
     } catch (error) {
         console.error('Error ensuring default categories:', error);

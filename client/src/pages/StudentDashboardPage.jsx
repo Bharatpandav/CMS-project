@@ -1,34 +1,222 @@
+/**
+ * Student dashboard — same layout as HOD / Dean / VC; stats scoped to raisedBy student.
+ */
+
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.jsx';
+import { studentApi } from '../api/client.js';
+import { useComplaintsData } from '../hooks/useComplaintsData.js';
+import { RecentComplaintsTable } from '../components/RecentComplaintsTable.jsx';
+import { AppIcon } from '../components/AppIcon.jsx';
+import { PageHeader } from '../components/PageHeader.jsx';
+import { useComplaintsDataSync } from '../hooks/useComplaintsDataSync.js';
+import { DashboardHowItWorks } from '../components/DashboardHowItWorks.jsx';
+import { getDashboardHowItWorksSteps } from '../config/dashboardHowItWorksSteps.jsx';
+
+function displayValue(loading, value) {
+    if (loading) return '\u2026';
+    if (value === undefined || value === null) return '\u2014';
+    return String(value);
+}
+
+function HodStatCard({ iconKey, accent, label, value, to }) {
+    const inner = (
+        <>
+            <div
+                className={'hod-stat-card__icon hod-stat-card__icon--' + accent}
+                aria-hidden="true"
+            >
+                <AppIcon name={iconKey} size="lg" />
+            </div>
+            <div className="hod-stat-card__body">
+                <p className="hod-stat-card__value">{value}</p>
+                <p className="hod-stat-card__label">{label}</p>
+            </div>
+        </>
+    );
+
+    if (to) {
+        return (
+            <Link
+                to={to}
+                className="hod-stat-card hod-stat-card--link"
+                aria-label={label + ': ' + value + '. Click to view.'}
+            >
+                {inner}
+            </Link>
+        );
+    }
+
+    return (
+        <article className="hod-stat-card" aria-label={label + ': ' + value}>
+            {inner}
+        </article>
+    );
+}
+
+function useStudentStats() {
+    const [data, setData] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+
+    const load = useCallback(async ({ silent = false } = {}) => {
+        if (!silent) {
+            setLoading(true);
+            setError('');
+        }
+        try {
+            const response = await studentApi.getDashboardStats();
+            setData(response);
+            if (!silent) setError('');
+        } catch (err) {
+            if (!silent) {
+                setError(err.message || 'Failed to load dashboard statistics');
+            }
+        } finally {
+            if (!silent) {
+                setLoading(false);
+            }
+        }
+    }, []);
+
+    useEffect(() => {
+        load();
+    }, [load]);
+
+    useComplaintsDataSync(() => load({ silent: true }), true);
+
+    return { data, loading, error, reload: load };
+}
 
 export function StudentDashboardPage() {
     const { user } = useAuth();
+    const firstName = (user?.name || 'there').split(/\s+/)[0];
+
+    useEffect(() => {
+        document.title = 'Student Dashboard | SBSSU CMS';
+    }, []);
+
+    const {
+        data: statsData,
+        loading: statsLoading,
+        error: statsError,
+        reload: reloadStats
+    } = useStudentStats();
+
+    const {
+        complaints,
+        loading: complaintsLoading,
+        error: complaintsError,
+        reload: reloadComplaints
+    } = useComplaintsData({
+        limit: 8,
+        myComplaints: true,
+        raisedOnly: true
+    });
+
+    const stats = statsData?.complaints;
+    const complaintsListPath = '/student/complaints';
+
+    function statusFilterPath(status) {
+        return complaintsListPath + '?status=' + status;
+    }
 
     return (
-        <div className="page-stack">
-            <header className="page-header">
-                <h1>Dashboard</h1>
-                <p>Welcome back, {user?.name}.</p>
-            </header>
-            <article className="panel">
-                <p>
-                    <Link
-                        to="/student/complaints/register"
-                        className="link-teal"
-                    >
-                        Register a complaint
-                    </Link>{' '}
-                    or view{' '}
-                    <Link to="/student/complaints" className="link-teal">
-                        My Complaints
+        <div className="unified-dashboard page-stack">
+            <PageHeader
+                className="unified-dashboard__hero"
+                title={
+                    <>
+                        Welcome back, {firstName}.{' '}
+                        <span>Your Student dashboard.</span>
+                    </>
+                }
+                description="Raise, track, and resolve complaints with a transparent workflow. Data below reflects only records you are authorized to access."
+            />
+
+            {statsError ? (
+                <div className="inline-alert" role="alert">
+                    <span>{statsError}</span>
+                    <button type="button" onClick={reloadStats}>
+                        Retry
+                    </button>
+                </div>
+            ) : null}
+            {complaintsError ? (
+                <div className="inline-alert" role="alert">
+                    <span>{complaintsError}</span>
+                    <button type="button" onClick={reloadComplaints}>
+                        Retry
+                    </button>
+                </div>
+            ) : null}
+
+            <section
+                className="hod-stat-grid"
+                aria-label="My complaint statistics"
+            >
+                <HodStatCard
+                    iconKey="clipboard-list"
+                    accent="navy"
+                    label="My Complaints"
+                    value={displayValue(statsLoading, stats?.total)}
+                    to={complaintsListPath}
+                />
+                <HodStatCard
+                    iconKey="circle-check"
+                    accent="teal"
+                    label="Accepted"
+                    value={displayValue(statsLoading, stats?.accepted)}
+                    to={statusFilterPath('accepted')}
+                />
+                <HodStatCard
+                    iconKey="circle-alert"
+                    accent="red"
+                    label="Rejected"
+                    value={displayValue(statsLoading, stats?.rejected)}
+                    to={statusFilterPath('rejected')}
+                />
+                <HodStatCard
+                    iconKey="hourglass"
+                    accent="blue"
+                    label="Pending"
+                    value={displayValue(statsLoading, stats?.pending)}
+                    to={statusFilterPath('pending')}
+                />
+                <HodStatCard
+                    iconKey="badge-check"
+                    accent="green"
+                    label="Resolved"
+                    value={displayValue(statsLoading, stats?.resolved)}
+                    to={statusFilterPath('resolved')}
+                />
+            </section>
+
+            <article className="panel panel--table">
+                <div className="panel__header">
+                    <h2>Recent complaints</h2>
+                    <Link to={complaintsListPath} className="link-teal">
+                        View all
                     </Link>
-                    . Update your password from{' '}
-                    <Link to="/student/profile" className="link-teal">
-                        My Profile
-                    </Link>
-                    .
-                </p>
+                </div>
+                {complaintsLoading ? (
+                    <p className="panel__loading">Loading complaints…</p>
+                ) : (
+                    <RecentComplaintsTable
+                        complaints={complaints.slice(0, 8)}
+                        showViewAll={false}
+                        complaintDetailBase="/student/complaints"
+                    />
+                )}
             </article>
+
+            <DashboardHowItWorks
+                titleId="student-how-title"
+                steps={getDashboardHowItWorksSteps('student', {
+                    register: '/student/complaints/register'
+                })}
+            />
         </div>
     );
 }

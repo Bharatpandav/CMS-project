@@ -1,11 +1,19 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { authApi } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.jsx';
+import { getPostLoginPath } from '../utils/roleRedirect.js';
+import {
+    canAccessManagementPortal,
+    getManagementDashboardPath
+} from '../utils/managementAccess.js';
 import { validateNewPassword } from '../utils/passwordPolicy.js';
 import { PasswordField } from './PasswordField.jsx';
+import { PasswordRequirementsChecklist } from './PasswordRequirementsChecklist.jsx';
 
-export function ChangePasswordCard() {
-    const { updateUser } = useAuth();
+export function ChangePasswordCard({ redirectOnSuccess = false }) {
+    const { user, updateUser } = useAuth();
+    const navigate = useNavigate();
     const [currentPassword, setCurrentPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -59,6 +67,7 @@ export function ChangePasswordCard() {
                 currentPassword,
                 newPassword
             );
+            const nextUser = data.user || user;
             if (data.user) {
                 updateUser(data.user);
             }
@@ -66,6 +75,14 @@ export function ChangePasswordCard() {
             setNewPassword('');
             setConfirmPassword('');
             setFieldErrors({});
+            if (redirectOnSuccess) {
+                const cleared = { ...nextUser, isFirstLogin: false };
+                const dest = canAccessManagementPortal(cleared.role)
+                    ? getManagementDashboardPath()
+                    : getPostLoginPath(cleared);
+                navigate(dest, { replace: true });
+                return;
+            }
             setSuccess('Password updated successfully.');
         } catch (err) {
             setFormError(err.message || 'Password update failed');
@@ -110,6 +127,7 @@ export function ChangePasswordCard() {
                     disabled={loading}
                     error={fieldErrors.new}
                 />
+                <PasswordRequirementsChecklist password={newPassword} />
                 <PasswordField
                     id="profile-confirm-password"
                     label="Confirm New Password"

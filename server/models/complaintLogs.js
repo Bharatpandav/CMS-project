@@ -52,13 +52,44 @@ const complaintLogSchema = new mongoose.Schema(
                 'rejected',
                 'escalated',
                 'resolved',
+                'closed',
                 'returned',
-                'reopened'
+                'reopened',
+                'contact_viewed',
+                'comment',
+                'withdrawn'
             ]
         },
         remarks: {
             type: String
-        }
+        },
+        actionRecipient: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'user',
+            default: null,
+            index: true
+        },
+        attachments: [
+            {
+                url: { type: String, required: true },
+                filename: { type: String, default: '' },
+                fileType: { type: String, default: '' },
+                fileSize: { type: Number, default: 0 },
+                uploadedBy: {
+                    type: mongoose.Schema.Types.ObjectId,
+                    ref: 'user',
+                    default: null
+                },
+                uploadedByName: { type: String, default: '' },
+                uploadedAt: { type: Date, default: null },
+                intendedRecipient: {
+                    type: mongoose.Schema.Types.ObjectId,
+                    ref: 'user',
+                    default: null
+                },
+                actionType: { type: String, default: '' }
+            }
+        ]
     },
     { timestamps: true }
 );

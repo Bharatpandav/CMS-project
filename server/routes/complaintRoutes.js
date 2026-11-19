@@ -2,18 +2,25 @@ import express from 'express';
 
 import {
     getCategories,
+    getComplaintDepartments,
+    getComplaintRoutingPreview,
+    getPublicComplaintStats,
     createComplaint,
     getComplaints,
     getComplaintById,
+    getComplaintContact,
+    addComplaintComment,
     inviteToComplaint,
     getMyInvitations,
     respondToInvitation,
     joinComplaint,
     leaveComplaint,
+    withdrawComplaint,
     updateComplaintStatus,
     assignComplaint,
     escalateComplaint,
-    resolveComplaint
+    resolveComplaint,
+    closeComplaint
 } from '../controller/complaintController.js';
 
 import authUser from '../middleware/auth.js';
@@ -23,6 +30,14 @@ const complaintRouter = express.Router();
 
 // 1. Complaint Categories
 complaintRouter.get('/categories', getCategories);
+complaintRouter.get('/departments', getComplaintDepartments);
+complaintRouter.get(
+    '/routing-preview',
+    authUser,
+    requirePasswordChange,
+    getComplaintRoutingPreview
+);
+complaintRouter.get('/public-stats', getPublicComplaintStats);
 
 // 2. Student Group Invitations
 complaintRouter.get(
@@ -61,6 +76,20 @@ complaintRouter.get(
     getComplaintById
 );
 
+complaintRouter.get(
+    '/get/:id/contact',
+    authUser,
+    requirePasswordChange,
+    getComplaintContact
+);
+
+complaintRouter.post(
+    '/get/:id/comments',
+    authUser,
+    requirePasswordChange,
+    addComplaintComment
+);
+
 // 4. Group Complaint Participation (Join / Leave / Invite)
 complaintRouter.post(
     '/:id/invite',
@@ -81,6 +110,13 @@ complaintRouter.post(
     authUser,
     requirePasswordChange,
     leaveComplaint
+);
+
+complaintRouter.post(
+    '/:id/withdraw',
+    authUser,
+    requirePasswordChange,
+    withdrawComplaint
 );
 
 // 5. Workflow Management (Assign, Status, Escalate, Resolve)
@@ -117,6 +153,13 @@ complaintRouter.put(
     authUser,
     requirePasswordChange,
     resolveComplaint
+);
+
+complaintRouter.put(
+    '/close/:id',
+    authUser,
+    requirePasswordChange,
+    closeComplaint
 );
 
 export default complaintRouter;

@@ -1,12 +1,17 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
+import { ArrowUpRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
 import {
-    getStaffBasePath,
-    isAdminStaffRole
-} from '../utils/staffRoles.js';
-import { IconMoreVertical } from './icons.jsx';
-import { PriorityBadge, StatusBadge } from './StatusBadge.jsx';
+    buildListReturnState,
+    resolveComplaintsListPath,
+    saveListUiState
+} from '../utils/navigationPaths.js';
+import { StatusBadge } from './StatusBadge.jsx';
+import { complaintSubject } from '../utils/complaintTitle.js';
+import { complaintPublicId } from '../utils/complaintPublicId.js';
+import { complaintAccessLabel } from '../utils/complaintAccess.js';
+import { EmptyState } from './ui/index.js';
+import { isResolvedLikeStatus } from '../utils/complaintStatusDisplay.js';
 
 function formatDate(value) {
     if (!value) return '—';
@@ -17,38 +22,45 @@ function formatDate(value) {
     });
 }
 
-function shortId(id) {
-    if (!id) return '—';
-    const str = String(id);
-    return str.length > 8 ? `#${str.slice(-8).toUpperCase()}` : `#${str}`;
-}
-
 export function RecentComplaintsTable({
     complaints = [],
     showViewAll = true,
-    viewAllPath = '/complaints'
+    viewAllPath = '/complaints',
+    complaintDetailBase: complaintDetailBaseProp,
+    listStateKey: listStateKeyProp,
+    onBeforeDetailNavigate
 }) {
     const { user } = useAuth();
-    const [openMenu, setOpenMenu] = useState(null);
-    const staffBase = isAdminStaffRole(user?.role)
-        ? getStaffBasePath(user.role)
-        : null;
+    const location = useLocation();
     const complaintDetailBase =
-        user?.role === 'student'
-            ? '/student/complaints'
-            : staffBase
-            ? `${staffBase}/complaints`
-            : '/complaints';
+        complaintDetailBaseProp ||
+        resolveComplaintsListPath(user?.role, location.pathname);
+    const listStateKey = listStateKeyProp || location.pathname;
+    const listReturn = buildListReturnState(
+        location.pathname,
+        location.search
+    );
+
+    const persistListUi = () => {
+        const extra =
+            typeof onBeforeDetailNavigate === 'function'
+                ? onBeforeDetailNavigate()
+                : {};
+        saveListUiState(listStateKey, {
+            scrollY: window.scrollY,
+            ...extra
+        });
+    };
 
     if (!complaints.length) {
         return (
-            <div className="empty-state">
-                <p>No complaints in your authorized scope yet.</p>
-                <p className="empty-state__sub">
-                    New complaints will appear here when they are routed to
-                    your role.
-                </p>
-            </div>
+            <EmptyState
+                icon="clipboard-list"
+                title="No complaints in your authorized scope yet"
+            >
+                New complaints will appear here when they are routed to your
+                role.
+            </EmptyState>
         );
     }
 
@@ -63,15 +75,37 @@ export function RecentComplaintsTable({
                         <th>Status</th>
                         <th>Assigned To</th>
                         <th>Date</th>
-                        <th>Priority</th>
                         <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {complaints.map((row) => (
-                        <tr key={row._id}>
-                            <td className="mono">{shortId(row._id)}</td>
-                            <td className="title-cell">{row.title}</td>
+                    {complaints.map((row) => {
+                        const status = (row.status || '').toLowerCase();
+                        const rowClass =
+                            status === 'withdrawn'
+                                ? 'is-withdrawn'
+                                : isResolvedLikeStatus(status)
+                                  ? 'is-resolved'
+                                  : undefined;
+                        return (
+                        <tr
+                            key={row._id}
+                            className={rowClass}
+                        >
+                            <td className="mono">{complaintPublicId(row) || '—'}</td>
+                            <td className="title-cell" title={complaintSubject(row.title)}>
+                                <span className="title-cell__line">
+                                    {row.status === 'withdrawn' ? (
+                                        <StatusBadge status="withdrawn" />
+                                    ) : null}
+                                    <span className="title-cell__text">
+                                        {complaintSubject(row.title)}
+                                    </span>
+                                </span>
+                                <span className="title-cell__access">
+                                    {complaintAccessLabel(row)}
+                                </span>
+                            </td>
                             <td>{row.department || '—'}</td>
                             <td>
                                 <StatusBadge status={row.status} />
@@ -82,41 +116,21 @@ export function RecentComplaintsTable({
                                     : '—'}
                             </td>
                             <td>{formatDate(row.createdAt)}</td>
-                            <td>
-                                <PriorityBadge priority={row.priority} />
-                            </td>
                             <td className="action-cell">
-                                <div className="row-menu">
-                                    <button
-                                        type="button"
-                                        className="icon-btn"
-                                        aria-label="Actions"
-                                        onClick={() =>
-                                            setOpenMenu(
-                                                openMenu === row._id
-                                                    ? null
-                                                    : row._id
-                                            )
-                                        }
-                                    >
-                                        <IconMoreVertical />
-                                    </button>
-                                    {openMenu === row._id ? (
-                                        <div className="row-menu__dropdown">
-                                            <Link
-                                                to={`${complaintDetailBase}/${row._id}`}
-                                                onClick={() =>
-                                                    setOpenMenu(null)
-                                                }
-                                            >
-                                                View details
-                                            </Link>
-                                        </div>
-                                    ) : null}
-                                </div>
+                                <Link
+                                    className="view-details-btn cms-btn-reflect"
+                                    to={`${complaintDetailBase}/${row._id}`}
+                                    state={listReturn}
+                                    onClick={persistListUi}
+                                    aria-label={`View details for ${complaintSubject(row.title)}`}
+                                >
+                                    <ArrowUpRight size={16} aria-hidden />
+                                    View details
+                                </Link>
                             </td>
                         </tr>
-                    ))}
+                        );
+                    })}
                 </tbody>
             </table>
             {showViewAll ? (

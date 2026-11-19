@@ -28,8 +28,23 @@ export function AuthProvider({ children }) {
         setLoading(false);
     }, []);
 
-    const login = useCallback(async (identifier, password) => {
-        const data = await authApi.login(identifier, password);
+    useEffect(() => {
+        const onExpired = () => {
+            setAuthToken(null);
+            setStoredUser(null);
+            setUser(null);
+        };
+        window.addEventListener('cms:session-expired', onExpired);
+        return () =>
+            window.removeEventListener('cms:session-expired', onExpired);
+    }, []);
+
+    const login = useCallback(async (identifier, password, options = {}) => {
+        const data = await authApi.login(
+            identifier,
+            password,
+            options.loginChannel
+        );
         setAuthToken(data.token);
         setStoredUser(data.user);
         setUser(data.user);
