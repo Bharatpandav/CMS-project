@@ -1,0 +1,5 @@
+CMS_Synopsis_Output/
+server/test-duplicate-emails.csv
+server/test-invalid-semester.csv
+server/testDuplicateEmails.js
+server/testInvalidSemester.js
