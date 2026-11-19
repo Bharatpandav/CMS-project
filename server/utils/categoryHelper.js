@@ -12,21 +12,21 @@ export const DEFAULT_CATEGORIES = [
         name: 'Hostel & Mess',
         description: 'Room maintenance, mess food quality, water, electricity, and sanitation in hostels',
         targetDepartment: 'Hostel Affairs',
-        initialLevel: 'dean',
+        initialLevel: 'hod',
         isActive: true
     },
     {
         name: 'Infrastructure & Labs',
         description: 'Lab equipment, classroom computers, projectors, network, and physical facilities',
         targetDepartment: 'Estate & Maintenance',
-        initialLevel: 'dean',
+        initialLevel: 'hod',
         isActive: true
     },
     {
         name: 'Examinations & Results',
         description: 'Exam scheduling, admit cards, marks entry, and transcript discrepancies',
         targetDepartment: 'Examination Cell',
-        initialLevel: 'dean',
+        initialLevel: 'hod',
         isActive: true
     },
     {
@@ -40,14 +40,14 @@ export const DEFAULT_CATEGORIES = [
         name: 'Fee & Accounts',
         description: 'Fee payment receipts, refund claims, scholarship processing, and dues',
         targetDepartment: 'Accounts & Finance',
-        initialLevel: 'dean',
+        initialLevel: 'hod',
         isActive: true
     },
     {
         name: 'Student Welfare & Discipline',
         description: 'Harassment, ragging, student safety, and general welfare concerns',
         targetDepartment: 'Student Affairs',
-        initialLevel: 'dean',
+        initialLevel: 'hod',
         isActive: true
     },
     {
@@ -79,6 +79,11 @@ export const ensureDefaultCategories = async () => {
                 { upsert: true }
             );
         }
+
+        await Category.updateMany(
+            { initialLevel: { $ne: 'hod' } },
+            { $set: { initialLevel: 'hod' } }
+        );
     } catch (error) {
         console.error('Error ensuring default categories:', error);
     }

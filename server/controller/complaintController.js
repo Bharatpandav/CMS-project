@@ -168,40 +168,6 @@ const getComplaintRoutingPreview = async (req, res) => {
             });
         }
 
-        let initialLevel = 'hod';
-        if (categoryId) {
-            const categoryDoc = await Category.findOne({
-                _id: categoryId,
-                isActive: true
-            })
-                .select('initialLevel')
-                .lean();
-            if (categoryDoc?.initialLevel) {
-                initialLevel = categoryDoc.initialLevel;
-            }
-        }
-
-        if (initialLevel === 'dean') {
-            const dean = await findInstitutionalDean();
-            if (!dean) {
-                return res.json({
-                    success: true,
-                    found: false,
-                    level: 'dean',
-                    department
-                });
-            }
-
-            return res.json({
-                success: true,
-                found: true,
-                level: 'dean',
-                assigneeName: dean.name,
-                assigneeRole: 'dean',
-                department
-            });
-        }
-
         const hod = await findDepartmentHod(department);
         if (!hod) {
             return res.json({
@@ -401,45 +367,24 @@ const createComplaint = async (req, res) => {
             });
         }
 
-        const initialLevel = categoryDoc.initialLevel || 'hod';
+        // Student complaints always route to the HOD of the selected department
+        // (e.g. CSE complaint → CSE HOD), not Dean/VC by category.
+        const hod = await findDepartmentHod(finalDepartment);
 
-        let currentLevel = initialLevel;
-        let currentAssignee = null;
-
-        if (initialLevel === 'hod') {
-            const hod = await findDepartmentHod(finalDepartment);
-
-            if (!hod) {
-                return res.status(422).json({
-                    success: false,
-                    message: `No active HOD found for department "${finalDepartment}". Complaint cannot be routed.`,
-                    routingIssue: {
-                        department: finalDepartment,
-                        expectedRole: 'hod'
-                    }
-                });
-            }
-
-            currentAssignee = hod._id;
-            currentLevel = 'hod';
-        } else {
-            const dean = await findInstitutionalDean();
-
-            if (!dean) {
-                return res.status(422).json({
-                    success: false,
-                    message:
-                        'No active Dean found. Complaint cannot be routed.',
-                    routingIssue: {
-                        department: finalDepartment,
-                        expectedRole: 'dean'
-                    }
-                });
-            }
-
-            currentAssignee = dean._id;
-            currentLevel = 'dean';
+        if (!hod) {
+            return res.status(422).json({
+                success: false,
+                message: `No active HOD found for department "${finalDepartment}". Complaint cannot be routed.`,
+                routingIssue: {
+                    department: finalDepartment,
+                    expectedRole: 'hod'
+                }
+            });
         }
+
+        const initialLevel = 'hod';
+        const currentLevel = 'hod';
+        const currentAssignee = hod._id;
 
         // Construct server-controlled student profile snapshot
         const studentProfile = {
@@ -520,10 +465,7 @@ const createComplaint = async (req, res) => {
             undertaking: true,
             Date: new Date(),
             deadline: addTime(DURATIONS.OVERALL),
-            levelDeadline:
-                currentLevel === 'dean'
-                    ? addTime(DURATIONS.DEAN)
-                    : addTime(DURATIONS.HOD)
+            levelDeadline: addTime(DURATIONS.HOD)
         });
 
         await complaint.save();
