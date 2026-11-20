@@ -4,6 +4,7 @@ import {
     publishNotificationEvent,
     publishNotificationEvents
 } from './notificationEventHub.js';
+import { applyDepartmentUserFilter } from './departmentUserFilter.js';
 
 const DEDUPE_MS = 90_000;
 
@@ -115,16 +116,22 @@ export async function collectHodAdminRecipientIds(
     const department = (complaint?.department || '').trim();
 
     if (department) {
-        const hods = await User.find({
-            role: 'hod',
-            department,
-            isActive: true
-        })
-            .select('_id')
-            .lean();
+        const hodQuery = { role: 'hod', isActive: true };
+        applyDepartmentUserFilter(hodQuery, department);
+        const hods = await User.find(hodQuery).select('_id').lean();
         for (const hod of hods) {
             const id = userIdOf(hod._id);
             if (id && !exclude.has(id)) ids.add(id);
+        }
+    }
+
+    const assignerId = userIdOf(complaint?.assignedBy);
+    if (assignerId && !exclude.has(assignerId)) {
+        const assigner = await User.findById(assignerId)
+            .select('_id isActive')
+            .lean();
+        if (assigner?.isActive) {
+            ids.add(assignerId);
         }
     }
 
@@ -268,7 +275,11 @@ export async function notifyActionRecipients({
             message = `${actorName} returned complaint ${publicId} to you.`;
             break;
         case 'resolved':
-            message = `${actorName} resolved complaint ${publicId}.`;
+            if (actor?.role === 'advisor') {
+                message = `${actorName} (Advisor) resolved your complaint ${publicId}.`;
+            } else {
+                message = `${actorName} resolved complaint ${publicId}.`;
+            }
             break;
         case 'closed':
             message = actorName
@@ -308,6 +319,52 @@ export async function notifyActionRecipients({
             action,
             actorName
         });
+    }
+}
+
+/**
+ * After an advisor marks a complaint resolved, notify the HOD who assigned it (explicit bell entry).
+ * Students are notified via notifyActionRecipients in the resolve handler.
+ */
+export async function notifyAdvisorResolvedParties({
+    complaint,
+    actor,
+    remarks = ''
+}) {
+    if (!complaint?._id || actor?.role !== 'advisor') return;
+
+    const actorId = userIdOf(actor?._id || actor);
+    const actorName = actor?.name || 'Advisor';
+    const publicId = complaint.publicId || String(complaint._id);
+    const note = String(remarks || '').trim();
+
+    const assignerId = userIdOf(complaint.assignedBy);
+    if (assignerId && assignerId !== actorId) {
+        let hodMessage = `${actorName} resolved complaint ${publicId} that you assigned to them.`;
+        if (note) {
+            hodMessage += ` ${note.slice(0, 220)}`;
+        }
+
+        const recent = await Notification.findOne({
+            user: assignerId,
+            relatedComplaint: complaint._id,
+            action: { $in: ['resolved', 'resolved_by_advisor'] },
+            createdAt: { $gte: new Date(Date.now() - DEDUPE_MS) }
+        })
+            .select('_id')
+            .lean();
+
+        if (!recent) {
+            await createNotification({
+                userId: assignerId,
+                title: 'Assigned complaint resolved',
+                message: hodMessage,
+                type: 'complaint',
+                relatedComplaint: complaint._id,
+                action: 'resolved_by_advisor',
+                actorName
+            });
+        }
     }
 }
 
