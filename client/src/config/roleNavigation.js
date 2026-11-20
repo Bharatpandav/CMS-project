@@ -9,7 +9,7 @@ import { getStaffBasePath, isAdminStaffRole } from '../utils/staffRoles.js';
  * Primary navigation for the unified portal shell.
  */
 export function getPortalNavSections(user) {
-    const role = user?.role;
+    const role = (user?.role || '').trim().toLowerCase();
     if (!role) return [];
 
     if (role === 'student') {

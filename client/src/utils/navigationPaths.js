@@ -29,10 +29,12 @@ export function resolveComplaintsListPath(role, pathname = '') {
 export function getRoleDashboardPath(user) {
     if (!user) return '/';
     if (user.isFirstLogin) return '/change-password';
-    if (user.role === 'hod') return '/hod/dashboard';
-    if (user.role === 'dean') return '/dean/dashboard';
-    if (user.role === 'super_admin') return '/vc/dashboard';
-    if (user.role === 'student') return '/student/dashboard';
+    const role = (user.role || '').trim().toLowerCase();
+    if (role === 'hod') return '/hod/dashboard';
+    if (role === 'dean') return '/dean/dashboard';
+    if (role === 'advisor') return '/advisor/dashboard';
+    if (role === 'super_admin') return '/vc/dashboard';
+    if (role === 'student') return '/student/dashboard';
     return UNIFIED_DASHBOARD_PATH;
 }
 

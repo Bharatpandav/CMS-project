@@ -5,8 +5,12 @@ export const MANAGEMENT_PORTAL_ROLES = [
     'advisor'
 ];
 
+export function normalizeStaffRole(role) {
+    return (role || '').trim().toLowerCase();
+}
+
 export function canAccessManagementPortal(role) {
-    return MANAGEMENT_PORTAL_ROLES.includes(role);
+    return MANAGEMENT_PORTAL_ROLES.includes(normalizeStaffRole(role));
 }
 
 export const MANAGEMENT_BULK_ROLES = MANAGEMENT_PORTAL_ROLES;
