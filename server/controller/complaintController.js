@@ -12,6 +12,7 @@ import {
     assertTransition,
     canAuthorizeComplaintClose,
     canActAsCurrentHandler,
+    departmentsAlign,
     findDepartmentHod,
     findInstitutionalDean,
     findViceChancellor,
