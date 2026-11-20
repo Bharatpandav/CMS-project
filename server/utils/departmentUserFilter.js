@@ -46,3 +46,10 @@ export function applyDepartmentUserFilter(filter, department) {
 
     filter.department = values.length === 1 ? values[0] : { $in: values };
 }
+
+/** Complaint list/stats match for HOD (canonical + alias department names). */
+export function buildDepartmentComplaintFilter(department) {
+    const filter = {};
+    applyDepartmentUserFilter(filter, department);
+    return filter;
+}

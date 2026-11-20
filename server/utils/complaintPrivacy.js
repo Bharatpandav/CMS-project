@@ -1,4 +1,5 @@
 import { titleWithoutStatus } from './complaintTitle.js';
+import { departmentsAlign } from './complaintWorkflowHelper.js';
 
 const STAFF_ROLES = ['advisor', 'hod', 'dean', 'super_admin'];
 
@@ -14,8 +15,7 @@ export function canResolveComplaintContact(user, complaint) {
         complaint.currentAssignee?._id?.toString() === userIdStr;
     const isDeptHod =
         user.role === 'hod' &&
-        user.department &&
-        user.department === complaint.department;
+        departmentsAlign(user.department, complaint.department);
     const isScopedDean =
         user.role === 'dean' &&
         (isAssignee || complaint.currentLevel === 'dean');

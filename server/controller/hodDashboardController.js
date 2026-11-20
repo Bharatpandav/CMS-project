@@ -9,6 +9,7 @@ import User from '../models/userModel.js';
 import { DEPARTMENT_STAFF_ROLES } from '../utils/dashboardUserStatsHelper.js';
 import { applyDepartmentUserFilter } from '../utils/departmentUserFilter.js';
 import {
+    buildHodComplaintCountFilter,
     buildHodComplaintStatsPipeline,
     emptyHodComplaintStats,
     mapHodComplaintAggRow
@@ -55,7 +56,7 @@ export const getHodDashboardStats = async (req, res) => {
 
         const [statsAgg, totalCount] = await Promise.all([
             Complaint.aggregate(buildHodComplaintStatsPipeline(department)),
-            Complaint.countDocuments({ department })
+            Complaint.countDocuments(buildHodComplaintCountFilter(department))
         ]);
 
         const complaints = mapHodComplaintAggRow(statsAgg[0], totalCount);

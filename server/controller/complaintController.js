@@ -104,7 +104,8 @@ const isUserAuthorizedForComplaint = (complaint, user) => {
     const isAssignee = recordId(complaint.currentAssignee) === userIdStr;
     const isAssigner = recordId(complaint.assignedBy) === userIdStr;
     const isDeptHOD =
-        user.role === 'hod' && user.department === complaint.department;
+        user.role === 'hod' &&
+        departmentsAlign(user.department, complaint.department);
     const isAssignedAdvisor =
         user.role === 'advisor' && isAssignee;
     const isScopedDean =

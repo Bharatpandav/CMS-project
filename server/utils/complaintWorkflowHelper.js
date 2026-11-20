@@ -1,7 +1,10 @@
 import User from '../models/userModel.js';
 import ComplaintLog from '../models/complaintLogs.js';
 import { getDepartmentHodLookupCandidates } from '../constants/complaintDepartments.js';
-import { getDepartmentUserFilterValues } from './departmentUserFilter.js';
+import {
+    buildDepartmentComplaintFilter,
+    getDepartmentUserFilterValues
+} from './departmentUserFilter.js';
 
 export const departmentsAlign = (a, b) => {
     if (!a || !b) return false;
@@ -264,7 +267,7 @@ export const getListFilterForRole = (role, userId, department) => {
     }
 
     if (role === 'hod') {
-        return { department };
+        return buildDepartmentComplaintFilter(department);
     }
 
     if (role === 'dean') {
