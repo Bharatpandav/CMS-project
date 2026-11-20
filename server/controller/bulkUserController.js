@@ -254,6 +254,18 @@ const bulkCreateUsers = async (req, res) => {
                 effectiveDepartment = hodDepartment;
             }
 
+            if (creatorRole === 'advisor') {
+                if (role?.trim() !== 'student') {
+                    failedUsers.push({
+                        row: rowNumber,
+                        email: email || '',
+                        reason:
+                            'Advisor accounts may only import Student users'
+                    });
+                    continue;
+                }
+            }
+
             /*
              * Basic required-field validation
              */

@@ -31,7 +31,6 @@ function formatRole(role) {
 
 export function ManagementUsersPage() {
     const { user: actor } = useAuth();
-    const isAdvisor = actor?.role === 'advisor';
     const [searchParams, setSearchParams] = useSearchParams();
     const [users, setUsers] = useState([]);
     const [total, setTotal] = useState(0);
@@ -46,8 +45,7 @@ export function ManagementUsersPage() {
 
     const page = Math.max(1, Number(searchParams.get('page')) || 1);
     const search = searchParams.get('search') || '';
-    const roleParam = searchParams.get('role') || '';
-    const role = isAdvisor ? 'student' : roleParam;
+    const role = searchParams.get('role') || '';
     const status = searchParams.get('status') || '';
     const sortBy = searchParams.get('sortBy') || 'createdAt';
     const sortOrder = searchParams.get('sortOrder') || 'desc';
@@ -80,14 +78,6 @@ export function ManagementUsersPage() {
     useEffect(() => {
         load();
     }, [load]);
-
-    useEffect(() => {
-        if (isAdvisor && roleParam && roleParam !== 'student') {
-            const next = new URLSearchParams(searchParams);
-            next.set('role', 'student');
-            setSearchParams(next, { replace: true });
-        }
-    }, [isAdvisor, roleParam, searchParams, setSearchParams]);
 
     const patchParams = (updates) => {
         const next = new URLSearchParams(searchParams);
@@ -182,13 +172,12 @@ export function ManagementUsersPage() {
     };
 
     const actorId = actor?.id || actor?._id;
-    const title = isAdvisor
-        ? 'Students'
-        : role === 'student'
-          ? 'Students'
-          : role === 'staff'
-            ? 'Administrators & Staff'
-            : 'All Users';
+    const title =
+        role === 'student'
+            ? 'Students'
+            : role === 'staff'
+              ? 'Administrators & Staff'
+              : 'All Users';
 
     useEffect(() => {
         document.title = `${title} | SBSSU CMS`;
@@ -224,11 +213,7 @@ export function ManagementUsersPage() {
         <div className="page-stack">
             <PageHeader
                 title={title}
-                description={
-                    isAdvisor
-                        ? `${total} student${total === 1 ? '' : 's'} in your department.`
-                        : `${total} user${total === 1 ? '' : 's'} matching filters.`
-                }
+                description={`${total} user${total === 1 ? '' : 's'} matching filters.`}
                 breadcrumbs={[
                     { to: homePath, label: 'Dashboard' },
                     { label: title }
@@ -275,23 +260,21 @@ export function ManagementUsersPage() {
                     }
                     aria-label="Search users"
                 />
-                {!isAdvisor ? (
-                    <select
-                        value={role}
-                        onChange={(e) =>
-                            patchParams({ role: e.target.value, page: '1' })
-                        }
-                        aria-label="Filter by role"
-                    >
-                        <option value="">All roles</option>
-                        <option value="student">Student</option>
-                        <option value="staff">Staff (all)</option>
-                        <option value="advisor">Advisor</option>
-                        <option value="hod">HOD</option>
-                        <option value="dean">Dean</option>
-                        <option value="super_admin">Vice Chancellor</option>
-                    </select>
-                ) : null}
+                <select
+                    value={role}
+                    onChange={(e) =>
+                        patchParams({ role: e.target.value, page: '1' })
+                    }
+                    aria-label="Filter by role"
+                >
+                    <option value="">All roles</option>
+                    <option value="student">Student</option>
+                    <option value="staff">Staff (all)</option>
+                    <option value="advisor">Advisor</option>
+                    <option value="hod">HOD</option>
+                    <option value="dean">Dean</option>
+                    <option value="super_admin">Vice Chancellor</option>
+                </select>
                 <select
                     value={status}
                     onChange={(e) =>

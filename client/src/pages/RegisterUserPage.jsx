@@ -19,7 +19,7 @@ export function RegisterUserPage() {
     const { user } = useAuth();
     const isHod = user?.role === 'hod';
     const isAdvisor = user?.role === 'advisor';
-    const isDeptLocked = isHod || isAdvisor;
+    const isDeptLocked = isHod;
     const lockedDepartment = (user?.department || '').trim();
 
     const roleOptions = useMemo(() => {
@@ -76,10 +76,19 @@ export function RegisterUserPage() {
         setError('');
         setResult(null);
 
-        if (isDeptLocked && !lockedDepartment) {
+        if (isHod && !lockedDepartment) {
             setError(
                 'Your account has no department assigned. Contact the administrator before registering users.'
             );
+            return;
+        }
+
+        if (
+            isAdvisor &&
+            form.role === 'student' &&
+            !form.department.trim()
+        ) {
+            setError('Department is required for student accounts.');
             return;
         }
 
@@ -100,7 +109,7 @@ export function RegisterUserPage() {
                         : form.dateOfBirth.trim() || undefined
             };
 
-            if (isDeptLocked) {
+            if (isHod) {
                 payload.department = lockedDepartment;
             } else if (form.department.trim()) {
                 payload.department = form.department.trim();
@@ -122,7 +131,7 @@ export function RegisterUserPage() {
                 title="Register User"
                 description={
                     isAdvisor
-                        ? 'Register students for your department only.'
+                        ? 'Register student accounts. Enter the student department on the form.'
                         : isHod
                           ? 'Register students or advisors for your department only.'
                           : 'Create a single user account with generated credentials.'
@@ -133,10 +142,10 @@ export function RegisterUserPage() {
                 ]}
             />
 
-            {isDeptLocked && !lockedDepartment ? (
+            {isHod && !lockedDepartment ? (
                 <p className="form-error" role="alert">
-                    Your account does not have a department assigned. You cannot
-                    register users until an administrator configures your
+                    Your HOD account does not have a department assigned. You
+                    cannot register users until an administrator configures your
                     department.
                 </p>
             ) : null}
@@ -200,6 +209,9 @@ export function RegisterUserPage() {
                             <input
                                 value={form.department}
                                 onChange={update('department')}
+                                required={
+                                    isAdvisor && form.role === 'student'
+                                }
                             />
                         )}
                     </label>

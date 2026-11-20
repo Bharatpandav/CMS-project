@@ -37,6 +37,8 @@ export function BulkRegistrationPage() {
     const homePath =
         user?.role === 'hod'
             ? '/hod/dashboard'
+            : user?.role === 'advisor'
+              ? '/advisor/dashboard'
             : user?.role === 'dean'
               ? '/dean/dashboard'
               : user?.role === 'super_admin'
