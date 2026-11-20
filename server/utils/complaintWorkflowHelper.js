@@ -2,7 +2,7 @@ import User from '../models/userModel.js';
 import ComplaintLog from '../models/complaintLogs.js';
 import { getDepartmentHodLookupCandidates } from '../constants/complaintDepartments.js';
 import {
-    buildDepartmentComplaintFilter,
+    buildHodComplaintScopeFilter,
     getDepartmentUserFilterValues
 } from './departmentUserFilter.js';
 
@@ -267,7 +267,7 @@ export const getListFilterForRole = (role, userId, department) => {
     }
 
     if (role === 'hod') {
-        return buildDepartmentComplaintFilter(department);
+        return buildHodComplaintScopeFilter(department, userId);
     }
 
     if (role === 'dean') {

@@ -55,8 +55,12 @@ export const getHodDashboardStats = async (req, res) => {
         }
 
         const [statsAgg, totalCount] = await Promise.all([
-            Complaint.aggregate(buildHodComplaintStatsPipeline(department)),
-            Complaint.countDocuments(buildHodComplaintCountFilter(department))
+            Complaint.aggregate(
+                buildHodComplaintStatsPipeline(department, actor._id)
+            ),
+            Complaint.countDocuments(
+                buildHodComplaintCountFilter(department, actor._id)
+            )
         ]);
 
         const complaints = mapHodComplaintAggRow(statsAgg[0], totalCount);

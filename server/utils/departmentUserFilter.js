@@ -53,3 +53,27 @@ export function buildDepartmentComplaintFilter(department) {
     applyDepartmentUserFilter(filter, department);
     return filter;
 }
+
+/**
+ * HOD sees department complaints AND anything assigned to them (same as notifications).
+ */
+export function buildHodComplaintScopeFilter(department, hodUserId) {
+    const deptPart = buildDepartmentComplaintFilter(department);
+    const clauses = [];
+
+    if (deptPart.department) {
+        clauses.push({ department: deptPart.department });
+    }
+
+    if (hodUserId) {
+        clauses.push({ currentAssignee: hodUserId });
+    }
+
+    if (!clauses.length) {
+        return { _id: null };
+    }
+    if (clauses.length === 1) {
+        return clauses[0];
+    }
+    return { $or: clauses };
+}
