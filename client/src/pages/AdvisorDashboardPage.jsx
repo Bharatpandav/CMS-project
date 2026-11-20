@@ -14,7 +14,6 @@ import { PageHeader } from '../components/PageHeader.jsx';
 import { useComplaintsDataSync } from '../hooks/useComplaintsDataSync.js';
 import { DashboardHowItWorks } from '../components/DashboardHowItWorks.jsx';
 import { getDashboardHowItWorksSteps } from '../config/dashboardHowItWorksSteps.jsx';
-import { getPortalManagementNavItems } from '../utils/managementAccess.js';
 
 function displayValue(loading, value) {
     if (loading) return '\u2026';
@@ -154,43 +153,6 @@ export function AdvisorDashboardPage() {
                     </button>
                 </div>
             ) : null}
-
-            <section
-                className="unified-feature-grid"
-                aria-label="Management shortcuts"
-            >
-                {getPortalManagementNavItems().map((item) => (
-                    <Link
-                        key={item.to}
-                        to={item.to}
-                        className="unified-feature-card"
-                    >
-                        <div
-                            className="unified-feature-card__icon unified-feature-card__icon--neutral"
-                            aria-hidden="true"
-                        >
-                            <AppIcon
-                                name={
-                                    item.label === 'All Users'
-                                        ? 'users'
-                                        : item.label === 'Register User'
-                                          ? 'user-plus'
-                                          : 'upload'
-                                }
-                                size="lg"
-                            />
-                        </div>
-                        <h3>{item.label}</h3>
-                        <p>
-                            {item.label === 'All Users'
-                                ? 'View and manage student accounts.'
-                                : item.label === 'Register User'
-                                  ? 'Add a new student account.'
-                                  : 'Import students from CSV or Excel.'}
-                        </p>
-                    </Link>
-                ))}
-            </section>
 
             <section
                 className="hod-stat-grid"
