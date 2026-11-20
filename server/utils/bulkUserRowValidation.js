@@ -179,6 +179,10 @@ export async function validateBulkRecords(records, creator) {
             }
         }
 
+        if (creatorRole === 'advisor' && role && role !== 'student') {
+            reasons.push('Advisor may only import Student accounts');
+        }
+
         let effectiveDepartment = row.department?.trim() || '';
         if (creatorRole === 'hod' && hodDepartment) {
             effectiveDepartment = hodDepartment;

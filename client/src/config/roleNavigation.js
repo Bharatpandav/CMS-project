@@ -59,7 +59,7 @@ export function getPortalNavSections(user) {
     if (canAccessManagementPortal(role)) {
         sections.push({
             title: 'Management',
-            items: getPortalManagementNavItems(role)
+            items: getPortalManagementNavItems()
         });
     }
 

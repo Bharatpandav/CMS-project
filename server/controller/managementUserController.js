@@ -76,7 +76,7 @@ const buildListFilter = (query, actor = null) => {
         if (scope.scope === 'department') {
             if (scope.department) {
                 applyDepartmentUserFilter(filter, scope.department);
-            } else if (actorRole === 'hod' || actorRole === 'advisor') {
+            } else if (actorRole === 'hod') {
                 filter._id = null;
             }
         }

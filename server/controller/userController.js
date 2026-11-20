@@ -106,15 +106,6 @@ const createUser = async (req, res) => {
         }
 
         if (creator.role === 'advisor') {
-            const advisorDepartment = (creator.department || '').trim();
-            if (!advisorDepartment) {
-                return res.status(422).json({
-                    success: false,
-                    message:
-                        'Your Advisor account has no department assigned. Contact the administrator before registering students.'
-                });
-            }
-
             if (role !== 'student') {
                 return res.status(403).json({
                     success: false,
@@ -124,15 +115,14 @@ const createUser = async (req, res) => {
             }
 
             const requestedDept = (department || '').trim();
-            if (requestedDept && !departmentsAlign(requestedDept, advisorDepartment)) {
-                return res.status(403).json({
+            if (!requestedDept) {
+                return res.status(400).json({
                     success: false,
-                    message:
-                        'You cannot register users outside your own department'
+                    message: 'Department is required for student accounts'
                 });
             }
 
-            assignedDepartment = advisorDepartment;
+            assignedDepartment = requestedDept;
         }
 
         // Student-specific required fields
