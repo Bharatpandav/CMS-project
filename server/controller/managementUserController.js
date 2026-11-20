@@ -68,9 +68,17 @@ const buildListFilter = (query, actor = null) => {
     }
 
     if (actor) {
+        if (actorRole === 'advisor') {
+            filter.role = 'student';
+        }
+
         const scope = resolveUserStatsScope(actor);
-        if (scope.scope === 'department' && scope.department) {
-            applyDepartmentUserFilter(filter, scope.department);
+        if (scope.scope === 'department') {
+            if (scope.department) {
+                applyDepartmentUserFilter(filter, scope.department);
+            } else if (actorRole === 'hod' || actorRole === 'advisor') {
+                filter._id = null;
+            }
         }
     }
 
@@ -219,6 +227,33 @@ const updateUser = async (req, res) => {
                 success: false,
                 message: 'User not found'
             });
+        }
+
+        if (actorRole === 'advisor') {
+            if (target.role !== 'student') {
+                return res.status(403).json({
+                    success: false,
+                    message:
+                        'Advisors may only manage student accounts in their department'
+                });
+            }
+            const actor = await userModel
+                .findById(actorId)
+                .select('role department isActive')
+                .lean();
+            const scope = assertDeleteTargetInManagementScope(actor, target);
+            if (!scope.ok) {
+                return res.status(403).json({
+                    success: false,
+                    message: scope.message
+                });
+            }
+            if (req.body.role && req.body.role !== 'student') {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Advisors cannot change a user role'
+                });
+            }
         }
 
         const beforeChange = target.toObject();

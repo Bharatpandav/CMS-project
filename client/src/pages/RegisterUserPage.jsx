@@ -18,7 +18,9 @@ const DEFAULT_ROLES = ['student', 'advisor', 'hod', 'dean'];
 export function RegisterUserPage() {
     const { user } = useAuth();
     const isHod = user?.role === 'hod';
-    const hodDepartment = (user?.department || '').trim();
+    const isAdvisor = user?.role === 'advisor';
+    const isDeptLocked = isHod || isAdvisor;
+    const lockedDepartment = (user?.department || '').trim();
 
     const roleOptions = useMemo(() => {
         const allowed = rolesActorMayAssign(user?.role);
@@ -50,14 +52,16 @@ export function RegisterUserPage() {
     }, [form.role, roleOptions]);
 
     useEffect(() => {
-        if (isHod && hodDepartment) {
-            setForm((f) => ({ ...f, department: hodDepartment }));
+        if (isDeptLocked && lockedDepartment) {
+            setForm((f) => ({ ...f, department: lockedDepartment }));
         }
-    }, [isHod, hodDepartment]);
+    }, [isDeptLocked, lockedDepartment]);
 
     const homePath =
         user?.role === 'hod'
             ? '/hod/dashboard'
+            : user?.role === 'advisor'
+              ? '/advisor/dashboard'
             : user?.role === 'dean'
               ? '/dean/dashboard'
               : user?.role === 'super_admin'
@@ -72,7 +76,7 @@ export function RegisterUserPage() {
         setError('');
         setResult(null);
 
-        if (isHod && !hodDepartment) {
+        if (isDeptLocked && !lockedDepartment) {
             setError(
                 'Your account has no department assigned. Contact the administrator before registering users.'
             );
@@ -96,8 +100,8 @@ export function RegisterUserPage() {
                         : form.dateOfBirth.trim() || undefined
             };
 
-            if (isHod) {
-                payload.department = hodDepartment;
+            if (isDeptLocked) {
+                payload.department = lockedDepartment;
             } else if (form.department.trim()) {
                 payload.department = form.department.trim();
             }
@@ -117,9 +121,11 @@ export function RegisterUserPage() {
             <PageHeader
                 title="Register User"
                 description={
-                    isHod
-                        ? 'Register students or advisors for your department only.'
-                        : 'Create a single user account with generated credentials.'
+                    isAdvisor
+                        ? 'Register students for your department only.'
+                        : isHod
+                          ? 'Register students or advisors for your department only.'
+                          : 'Create a single user account with generated credentials.'
                 }
                 breadcrumbs={[
                     { to: homePath, label: 'Dashboard' },
@@ -127,10 +133,10 @@ export function RegisterUserPage() {
                 ]}
             />
 
-            {isHod && !hodDepartment ? (
+            {isDeptLocked && !lockedDepartment ? (
                 <p className="form-error" role="alert">
-                    Your HOD account does not have a department assigned. You
-                    cannot register users until an administrator configures your
+                    Your account does not have a department assigned. You cannot
+                    register users until an administrator configures your
                     department.
                 </p>
             ) : null}
@@ -174,16 +180,16 @@ export function RegisterUserPage() {
                     </label>
                     <label>
                         Department
-                        {isHod ? (
+                        {isDeptLocked ? (
                             <>
                                 <input
                                     value={form.department}
                                     readOnly
                                     disabled
-                                    aria-describedby="dept-hod-hint"
+                                    aria-describedby="dept-locked-hint"
                                 />
                                 <span
-                                    id="dept-hod-hint"
+                                    id="dept-locked-hint"
                                     className="field-hint"
                                 >
                                     Automatically assigned to your department

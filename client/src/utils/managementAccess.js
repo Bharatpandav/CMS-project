@@ -1,16 +1,38 @@
 export const MANAGEMENT_PORTAL_ROLES = [
     'super_admin',
     'dean',
-    'hod'
+    'hod',
+    'advisor'
 ];
 
 export function canAccessManagementPortal(role) {
     return MANAGEMENT_PORTAL_ROLES.includes(role);
 }
 
+/** Roles that may use bulk user import (advisors register students one at a time). */
+export const MANAGEMENT_BULK_ROLES = MANAGEMENT_PORTAL_ROLES.filter(
+    (role) => role !== 'advisor'
+);
+
+/** Sidebar Management section — advisors: students list + register only (no bulk). */
+export function getPortalManagementNavItems(role) {
+    if (role === 'advisor') {
+        return [
+            { to: '/management/users', label: 'Students' },
+            { to: '/management/register', label: 'Register User' }
+        ];
+    }
+    return [
+        { to: '/management/users', label: 'All Users' },
+        { to: '/management/register', label: 'Register User' },
+        { to: '/management/bulk', label: 'Bulk Import' }
+    ];
+}
+
 export function getManagementDashboardPath(role) {
     if (role === 'hod') return '/hod/dashboard';
     if (role === 'dean') return '/dean/dashboard';
+    if (role === 'advisor') return '/advisor/dashboard';
     if (role === 'super_admin') return '/vc/dashboard';
     return '/app/dashboard';
 }
