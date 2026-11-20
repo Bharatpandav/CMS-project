@@ -260,6 +260,11 @@ export const deanApi = {
     getDashboardStats: () => apiRequest('/api/dean/dashboard-stats')
 };
 
+export const advisorApi = {
+    /** Complaint stats for complaints assigned to the authenticated advisor. */
+    getDashboardStats: () => apiRequest('/api/advisor/dashboard-stats')
+};
+
 export const studentApi = {
     /** Complaint stats for complaints raised by the authenticated student. */
     getDashboardStats: () => apiRequest('/api/student/dashboard-stats')

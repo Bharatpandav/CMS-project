@@ -26,6 +26,7 @@ import { UnifiedDashboardPage } from './pages/UnifiedDashboardPage.jsx';
 import { HodDashboardPage } from './pages/HodDashboardPage.jsx';
 import { VcDashboardPage } from './pages/VcDashboardPage.jsx';
 import { DeanDashboardPage } from './pages/DeanDashboardPage.jsx';
+import { AdvisorDashboardPage } from './pages/AdvisorDashboardPage.jsx';
 import { StudentDashboardPage } from './pages/StudentDashboardPage.jsx';
 import { StaffRouteGuard } from './components/StaffRouteGuard.jsx';
 import { ADMIN_STAFF_ROLES } from './utils/staffRoles.js';
@@ -50,11 +51,7 @@ function staffList(role) {
     );
 }
 
-const legacyDashboardRedirects = [
-    '/advisor/dashboard',
-    '/dashboard',
-    '/portal'
-].map((path) => (
+const legacyDashboardRedirects = ['/dashboard', '/portal'].map((path) => (
     <Route
         key={path}
         path={path}
@@ -187,6 +184,14 @@ function App() {
                     <Route
                         path="/advisor/categories"
                         element={<Navigate to="/advisor/complaints" replace />}
+                    />
+                    <Route
+                        path="/advisor/dashboard"
+                        element={
+                            <RoleGate roles={['advisor']}>
+                                <AdvisorDashboardPage />
+                            </RoleGate>
+                        }
                     />
 
                     <Route

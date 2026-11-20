@@ -10,6 +10,7 @@ import hodRouter from './routes/hodRoutes.js';
 import vcRouter from './routes/vcRoutes.js';
 import deanRouter from './routes/deanRoutes.js';
 import studentRouter from './routes/studentRoutes.js';
+import advisorRouter from './routes/advisorRoutes.js';
 import dashboardStreamRouter from './routes/dashboardStreamRoutes.js';
 import cookieParser from 'cookie-parser';
 import { startComplaintSchedulers } from './cron/deadlineCron.js';
@@ -34,6 +35,7 @@ app.use('/api/hod', hodRouter);
 app.use('/api/vc', vcRouter);
 app.use('/api/dean', deanRouter);
 app.use('/api/student', studentRouter);
+app.use('/api/advisor', advisorRouter);
 app.use('/api/dashboard', dashboardStreamRouter);
 
 app.use((error, req, res, next) => {
