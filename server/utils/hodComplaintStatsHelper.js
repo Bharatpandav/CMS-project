@@ -1,3 +1,5 @@
+import { buildHodComplaintScopeFilter } from './departmentUserFilter.js';
+
 /**
  * Department-scoped HOD complaint dashboard buckets (mutually exclusive).
  *
@@ -94,8 +96,14 @@ export function buildScopedComplaintStatsPipeline(matchFilter) {
     ];
 }
 
-export function buildHodComplaintStatsPipeline(department) {
-    return buildScopedComplaintStatsPipeline({ department });
+export function buildHodComplaintStatsPipeline(department, hodUserId) {
+    return buildScopedComplaintStatsPipeline(
+        buildHodComplaintScopeFilter(department, hodUserId)
+    );
+}
+
+export function buildHodComplaintCountFilter(department, hodUserId) {
+    return buildHodComplaintScopeFilter(department, hodUserId);
 }
 
 export function emptyHodComplaintStats() {

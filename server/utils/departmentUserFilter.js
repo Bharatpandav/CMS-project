@@ -46,3 +46,34 @@ export function applyDepartmentUserFilter(filter, department) {
 
     filter.department = values.length === 1 ? values[0] : { $in: values };
 }
+
+/** Complaint list/stats match for HOD (canonical + alias department names). */
+export function buildDepartmentComplaintFilter(department) {
+    const filter = {};
+    applyDepartmentUserFilter(filter, department);
+    return filter;
+}
+
+/**
+ * HOD sees department complaints AND anything assigned to them (same as notifications).
+ */
+export function buildHodComplaintScopeFilter(department, hodUserId) {
+    const deptPart = buildDepartmentComplaintFilter(department);
+    const clauses = [];
+
+    if (deptPart.department) {
+        clauses.push({ department: deptPart.department });
+    }
+
+    if (hodUserId) {
+        clauses.push({ currentAssignee: hodUserId });
+    }
+
+    if (!clauses.length) {
+        return { _id: null };
+    }
+    if (clauses.length === 1) {
+        return clauses[0];
+    }
+    return { $or: clauses };
+}
