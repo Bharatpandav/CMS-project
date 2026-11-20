@@ -30,7 +30,10 @@ import { AdvisorDashboardPage } from './pages/AdvisorDashboardPage.jsx';
 import { StudentDashboardPage } from './pages/StudentDashboardPage.jsx';
 import { StaffRouteGuard } from './components/StaffRouteGuard.jsx';
 import { ADMIN_STAFF_ROLES } from './utils/staffRoles.js';
-import { MANAGEMENT_PORTAL_ROLES } from './utils/managementAccess.js';
+import {
+    MANAGEMENT_BULK_ROLES,
+    MANAGEMENT_PORTAL_ROLES
+} from './utils/managementAccess.js';
 import { UNIFIED_DASHBOARD_PATH } from './utils/appPaths.js';
 import { NotFoundPage } from './pages/NotFoundPage.jsx';
 import { ResetPasswordPage } from './pages/ResetPasswordPage.jsx';
@@ -309,7 +312,7 @@ function App() {
                     <Route
                         path="/management/bulk"
                         element={
-                            <RoleGate roles={MANAGEMENT_PORTAL_ROLES}>
+                            <RoleGate roles={MANAGEMENT_BULK_ROLES}>
                                 <BulkRegistrationPage />
                             </RoleGate>
                         }

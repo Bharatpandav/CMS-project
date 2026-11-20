@@ -1,4 +1,7 @@
-import { canAccessManagementPortal } from '../utils/managementAccess.js';
+import {
+    canAccessManagementPortal,
+    getPortalManagementNavItems
+} from '../utils/managementAccess.js';
 import { getPostLoginDestination, UNIFIED_DASHBOARD_PATH } from '../utils/appPaths.js';
 import { getStaffBasePath, isAdminStaffRole } from '../utils/staffRoles.js';
 
@@ -54,15 +57,9 @@ export function getPortalNavSections(user) {
     }
 
     if (canAccessManagementPortal(role)) {
-        const managementItems = [
-            { to: '/management/users', label: 'All Users' },
-            { to: '/management/register', label: 'Register User' },
-            { to: '/management/bulk', label: 'Bulk Import' }
-        ];
-
         sections.push({
             title: 'Management',
-            items: managementItems
+            items: getPortalManagementNavItems(role)
         });
     }
 
