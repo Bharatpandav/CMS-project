@@ -20,6 +20,10 @@ function isPortalItemActive(pathname, to) {
         return pathname === '/dean/dashboard';
     }
 
+    if (to === '/advisor/dashboard') {
+        return pathname === '/advisor/dashboard';
+    }
+
     if (to === '/vc/dashboard') {
         return pathname === '/vc/dashboard';
     }
@@ -27,9 +31,6 @@ function isPortalItemActive(pathname, to) {
     if (to === '/app/dashboard') {
         return (
             pathname === '/app/dashboard' ||
-            pathname === '/advisor/dashboard' ||
-            pathname === '/dean/dashboard' ||
-            pathname === '/student/dashboard' ||
             pathname === '/dashboard' ||
             pathname === '/portal'
         );

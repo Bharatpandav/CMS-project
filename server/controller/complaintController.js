@@ -582,6 +582,7 @@ const getComplaints = async (req, res) => {
             if (
                 role === 'hod' ||
                 role === 'dean' ||
+                role === 'advisor' ||
                 role === 'super_admin' ||
                 role === 'student'
             ) {

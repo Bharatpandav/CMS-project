@@ -31,13 +31,20 @@ export function StaffComplaintsPage() {
     const isHodComplaints = location.pathname.startsWith('/hod/complaints');
     const isVcComplaints = location.pathname.startsWith('/vc/complaints');
     const isDeanComplaints = location.pathname.startsWith('/dean/complaints');
+    const isAdvisorComplaints =
+        location.pathname.startsWith('/advisor/complaints');
     const usesDashboardBuckets =
-        isHodComplaints || isVcComplaints || isDeanComplaints;
+        isHodComplaints ||
+        isVcComplaints ||
+        isDeanComplaints ||
+        isAdvisorComplaints;
 
     const dashboardTo = location.pathname.startsWith('/hod')
         ? '/hod/dashboard'
         : location.pathname.startsWith('/dean')
           ? '/dean/dashboard'
+          : location.pathname.startsWith('/advisor')
+            ? '/advisor/dashboard'
           : location.pathname.startsWith('/vc')
             ? '/vc/dashboard'
           : location.pathname.startsWith('/management')

@@ -31,7 +31,10 @@ export function getPortalNavSections(user) {
     }
 
     const dashboardPath =
-        role === 'hod' || role === 'dean' || role === 'super_admin'
+        role === 'hod' ||
+        role === 'dean' ||
+        role === 'advisor' ||
+        role === 'super_admin'
             ? getPostLoginDestination({ role })
             : UNIFIED_DASHBOARD_PATH;
 

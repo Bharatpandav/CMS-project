@@ -169,6 +169,10 @@ export function UnifiedDashboardPage() {
         return <Navigate to="/dean/dashboard" replace />;
     }
 
+    if (role === 'advisor') {
+        return <Navigate to="/advisor/dashboard" replace />;
+    }
+
     const roleLabel = isStudent
         ? 'Student'
         : getStaffRoleLabel(role) || 'Portal';
