@@ -42,6 +42,7 @@ import {
     complainantRecipientIds,
     createNotification,
     notifyActionRecipients,
+    notifyAdvisorResolvedParties,
     notifyComplaintTrackingStaff,
     notifyComplaintWatchers,
     notifyNewComplaintSubmitted,
@@ -1965,12 +1966,25 @@ const resolveComplaint = async (req, res) => {
             attachmentCount: attachmentResult.stamped?.length || 0
         });
 
+        const resolveTrackingMessage =
+            actor.role === 'advisor'
+                ? `${actor.name} (Advisor) resolved complaint ${complaint.publicId || ''}.`
+                : `${actor.name} resolved complaint ${complaint.publicId || ''}.`;
+
         await notifyComplaintTrackingStaff({
             complaint,
             actor,
             action: 'resolved',
-            message: `${actor.name} resolved complaint ${complaint.publicId || ''}.`.trim()
+            message: resolveTrackingMessage.trim()
         });
+
+        if (actor.role === 'advisor') {
+            await notifyAdvisorResolvedParties({
+                complaint,
+                actor,
+                remarks: note
+            });
+        }
 
         await recordComplaintLog({
             complaintId: complaint._id,
